@@ -28,6 +28,15 @@ pp = ImgPP(size=32, patch_size=8, sigma=1.3, resolution=3)
 
 # t3 data blurred
 t3 = csetA.t3_training(pp)
+patches = pp.get_patches(t3)
+mean_patches = pp.mean_patches(patches)
+variance_patches = pp.variance(patches, mean_patches)
+centered_patches = pp.center(mean_patches)
+whitened_filters = pp.whiten(cenetered_patches)
+
+# Now we are ready to run our k-means regression
+# on our whitened filters
+
 
 # imgv = csetA.next_training()
 # imgv = pp.scale(imgv)
