@@ -1,10 +1,16 @@
 import Utils.DataLoader.NOData.NOFont as NOFont
 import Utils.DataLoader.NOData.NOHandwritting as NOHandwritting
 
+import Utils.ImgPreprocessing.ImgPreprocessoring
+from Utils.ImgPreprocessing.ImgPreprocessing import PreProcessing as ImgPP
+
 import scipy.ndimage as ndimage
 import scipy.misc as misc
 
-__dim__ = 28
+from theano import tensor as T
+from theano import function
+
+import numpy as np
 
 a = NOFont.NOFont(.5,.4)
 b = NOHandwritting.NOHandwritting(.5,.4)
@@ -15,9 +21,17 @@ assert a.get_classpath('8') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sa
 assert a.get_classpath('0') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample001'
 assert a.get_classpath('A') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample011'
 
-imgv = a.get_characterset('A').next_test()
-resize = __dim__ / float(imgv.shape[0]) if imgv.shape[0] > imgv.shape[1] else __dim__ / float(imgv.shape[1]) 
-img_resample = misc.imresize(imgv, resize, 'bilinear', 'P')
-misc.imsave("test1.png",img_resample)
+csetA = a.get_characterset('A')
 
-#print b.get_characterset('B').next_test().shape
+# We instantiate our image preprocessor
+pp = ImgPP(size=32, patch_size=8, sigma=1.3, resolution=3)
+
+# t3 data blurred
+t3 = csetA.t3_training(pp)
+
+# imgv = csetA.next_training()
+# imgv = pp.scale(imgv)
+# imgv = pp.blur(imgv)
+# print imgv.shape
+# print pp.get_patch(imgv)
+#print t3.shape
