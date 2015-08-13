@@ -7,13 +7,14 @@ from Utils.ImgPreprocessing.ImgPreprocessing import PreProcessing as ImgPP
 import scipy.ndimage as ndimage
 import scipy.misc as misc
 
+import theano
 from theano import tensor as T
 from theano import function
 
 import numpy as np
 
-a = NOFont.NOFont(.5,.4)
-b = NOHandwritting.NOHandwritting(.5,.4)
+a = NOFont.NOFont(.01,.4)
+b = NOHandwritting.NOHandwritting(.01,.4)
 
 assert a.get_classpath('a') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample037'
 assert a.get_classpath('9') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample010'
@@ -24,15 +25,32 @@ assert a.get_classpath('A') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sa
 csetA = a.get_characterset('A')
 
 # We instantiate our image preprocessor
-pp = ImgPP(size=32, patch_size=8, sigma=1.3, resolution=3)
+pp = ImgPP(size=32, patch_size=8, sigma=1.3, resolution=4)
 
 # t3 data blurred
+print "Building data set"
 t3 = csetA.t3_training(pp)
+print "Retrieving patches"
 patches = pp.get_patches(t3)
-mean_patches = pp.mean_patches(patches)
-variance_patches = pp.variance(patches, mean_patches)
-centered_patches = pp.center(mean_patches)
-whitened_filters = pp.whiten(cenetered_patches)
+print "Building mean patches"
+mean_patches = pp.tmethod_patches(patches, T.mean)
+print "Building std patches"
+std_patches = pp.tmethod_patches(patches, T.std)
+s = theano.shared(
+	value=std_patches,
+	name='s',
+	borrow=True
+)
+std_patches = T.maximum(s,.01).eval()
+print "Normalizing patches"
+normalized_patches = pp.normalize(patches,mean_patches,std_patches)
+print "Get covariant matrices"
+covariant = pp.get_covariance_subs(normalized_patches, mean_patches)
+print covariant[0]
+spectral_matrices = pp.spectral_matrices(covariant)
+# variance_patches = pp.variance(patches, mean_patches)
+# centered_patches = pp.center(mean_patches)
+# whitened_filters = pp.whiten(cenetered_patches)
 
 # Now we are ready to run our k-means regression
 # on our whitened filters
