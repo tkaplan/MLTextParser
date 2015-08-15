@@ -32,41 +32,60 @@ class PreProcessing:
 
 		self.covariant_loop = self.__build_covariant_loop()
 
-	def __build_spectral_loop(self):
+		# Input covariant tensor 3 get eigens tensor 3
+		self.eigens = self.__build_eigens_t3()
+		# Input identity matrix and eigenvalues
+		self.eigen_diag = self.__build_eigenvalue_diag()
+
+	def __build_eigens_t3(self):
 		t3_covs = T.dtensor3('covs')
 		
 		# Get eigenvectors
-		egmatrix_t3, update0 = theano.scan(
-			fn=lambda covariance: T.nlinalg.eig(convariance)[0],
+		egmatrix_t3, _ = theano.scan(
+			fn=lambda covariance: T.nlinalg.eig(covariance)[1],
 			sequences=[t3_covs]
 		)
 		
 		# Transpose is equal to the inverse
-		egmatrix_inv_t3, update1 = theano.scan(
-			fn=lambda egv: egv.dimsuffle(1,0),
-			sequences=[egmatrix]
+		egmatrix_inv_t3, _ = theano.scan(
+			fn=lambda egv: egv.dimshuffle(1,0),
+			sequences=[egmatrix_t3]
 		)
-
-		# Get identity matrix
-		identity = T.identity_like(egvector_inv_loop)
 
 		# Get eigenvalues
-		egvalues_t2, update2 = theano.scan(
-			fn=lambda covariance: T.nlinalg.eig(convariance)[1],
+		egvalues_t2, _ = theano.scan(
+			fn=lambda covariance: T.nlinalg.eig(covariance)[0],
 			sequences=[t3_covs]
 		)
-		
+
+		# We can't have zero when computing sqrt's because
+		# it'll messup theano
+		egv_diag, _ = theano.scan(
+			fn=lambda x: T.nlinalg.diag(T.maximum(x,.000001)),
+			sequences=[egvalues_t2]
+		)
+
+		egvalues_t3, _ = theano.scan(
+			fn=lambda x: T.nlinalg.matrix_inverse(T.sqrt(x)),
+			sequences=[egv_diag]
+		)
+
+		return function(inputs=[t3_covs],outputs=[egmatrix_t3, egvalues_t3, egmatrix_t3])
+
+	def __build_eigenvalue_diag(self):
+
 		egvalue_v = T.dvector('egv')
 
-		diagnol_root_t2, update3 = theano.scan(
+		# Get identity matrix
+		identity = T.dmatrix('identity')
+
+		diagonal_root_t2, update3 = theano.scan(
 			fn=lambda row, egvalues: row * egvalues,
 			sequences=[identity],
 			non_sequences=[egvalue_v]
 		)
 
-		diagnol_root_t2, update4 = theano.scan(
-			fn=lambda matrix,
-		)
+		return function(inputs=[identity,egvalue_v], outputs=[diagonal_root_t2])
 
 
 	def __build_covariant_loop(self):
@@ -78,84 +97,6 @@ class PreProcessing:
 		)
 
 		return function(inputs=[df],outputs=[covariant_loop])
-		
-		#self.patch = self.__build_patches()
-
-	# Let resolution be a number 0 < resolution <= 1
-	# Where we do a bilateral patching. Resolution of
-	# 1 means that 
-	# def __build_patches(self):
-	# 	t_patches = T.dtensor4('patches')
-	# 	t_imgs = T.dtensor3('imgs')
-	# 	t_imgv = T.dmatrix('imgv')
-	# 	t_res = T.iscalar('res')
-	# 	t_psize = T.iscalar('psize')
-	# 	t_x = T.iscalar('x')
-
-	# 	def build_patch(p_indx, p_imgv, t_x, p_res, p_psize):
-	# 		y = p_imgv[t_x: p_psize]
-	# 		t_x += p_res
-	# 		return y
-
-	# 	def bl(p_imgv):
-	# 		# This should return all the patches
-	# 		return ae(p_imgv,p_x,p_res,p_size)
-
-	# 	steps = int((self.size / 2 - self.patch_size / 2) / self.resolution)
-
-	# 	rp, _ = theano.scan(
-	# 		fn = build_patch,
-	# 		sequences=[T.arange(steps)],
-	# 		outputs_info=None,
-	# 		non_sequences=[t_imgv, t_x, t_res, t_psize]
-	# 	)
-
-	# 	ae = function([t_imgv, t_x, t_res, t_psize],on_unused_input='warn',outputs=[rp])
-
-	# 	def sdf(p_imgv, p_x, p_res, p_psize):
-	# 		return function(inputs=[p_imgv, p_x, p_res, p_psize],on_unused_input='warn',outputs=[rp])
-
-	# 	v_x = T.iscalar('v_x')
-	# 	v_m = T.iscalar('v_r')
-	# 	v_u = T.iscalar('v_p')
-
-	# 	# This should return all the patches
-	# 	row_patches, _ = theano.scan(
-	# 		fn=sdf,
-	# 		outputs_info=None,
-	# 		sequences=[t_imgs],
-	# 		non_sequences=[v_x, v_m, v_u]
-	# 	)
-
-		# patches, updates = theano.scan(
-		# 	fn = build_patch,
-		# 	outputs_info= None,
-		# 	sequences=[row_patches, T.arange(steps)],
-		# 	non_sequences=[t_res, t_psize]
-		# )
-		
-		#return function(inputs=[z, asdf],outputs=[testr])
-		#return function(inputs=[t_imgs, t_x, t_res, t_psize],outputs=[row_patches])
-
-		# k = T.iscalar("k")
-		# A = T.vector("A")
-
-		# # Symbolic description of the result
-		# result, updates = theano.scan(fn=lambda prior_result, A: prior_result * A,
-		#                               outputs_info=T.ones_like(A),
-		#                               non_sequences=A,
-		#                               n_steps=k)
-
-		# # We only care about A**k, but scan has provided us with A**1 through A**k.
-		# # Discard the values that we don't care about. Scan is smart enough to
-		# # notice this and not waste memory saving them.
-		# final_result = result[-1]
-
-		# # compiled function that returns A**k
-		# power = theano.function(inputs=[A,k], outputs=final_result, updates=updates)
-
-		# print power(range(10),2)
-		# print power(range(10),4)
 
 	def __build_center(self):
 		#We only want to compile our theano functions once
@@ -189,12 +130,32 @@ class PreProcessing:
 				y = j
 				yc = self.size-j-self.patch_size
 
+				print "###############"
+				print "Photo coo:"
+				print "x:+x {0}:{1}".format(x,x+self.patch_size)
+				print "xc:+xc {0}:{1}".format(xc,xc+self.patch_size)
+				print "y:+y {0}:{1}".format(y,y+self.patch_size)
+				print "yc: {0}:{1}".format(yc,yc+self.patch_size)
+				print "###############"
+				print "INDEX"
+				print self.map_patch_idx(img_idx,0,i,j)
+				print self.map_patch_idx(img_idx,1,i,j)
+				print self.map_patch_idx(img_idx,2,i,j)
+				print self.map_patch_idx(img_idx,3,i,j)
+
 				# Append patch 0 to tensor
 				patch_tensor[self.map_patch_idx(img_idx,0,i,j)] = imgv[x:x+self.patch_size,y:y+self.patch_size]		
+				misc.imsave("patches/debug{}.png".format(self.map_patch_idx(img_idx,0,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
+				misc.imsave("patches/debug{}-0.png".format(self.map_patch_idx(img_idx,0,i,j)), imgv[x:x+self.patch_size,y:y+self.patch_size])
 				patch_tensor[self.map_patch_idx(img_idx,1,i,j)] = imgv[xc:xc+self.patch_size,y:y+self.patch_size]
+				misc.imsave("patches/debug{}.png".format(self.map_patch_idx(img_idx,1,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
+				misc.imsave("patches/debug{}-1.png".format(self.map_patch_idx(img_idx,1,i,j)), imgv[xc:xc+self.patch_size,y:y+self.patch_size])
 				patch_tensor[self.map_patch_idx(img_idx,2,i,j)] = imgv[x:x+self.patch_size, yc:yc+self.patch_size]
+				misc.imsave("patches/debug{}.png".format(self.map_patch_idx(img_idx,2,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
+				misc.imsave("patches/debug{}-2.png".format(self.map_patch_idx(img_idx,2,i,j)), imgv[x:x+self.patch_size,yc:yc+self.patch_size])
 				patch_tensor[self.map_patch_idx(img_idx,3,i,j)] = imgv[xc:xc+self.patch_size ,yc:yc+self.patch_size]
-				
+				misc.imsave("patches/debug{}-3.png".format(self.map_patch_idx(img_idx,3,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
+				misc.imsave("patches/debug{}-0.png".format(self.map_patch_idx(img_idx,3,i,j)), imgv[xc:xc+self.patch_size,yc:yc+self.patch_size])
 		return patch_tensor
 				
 	def get_patches(self, t3):
@@ -207,6 +168,8 @@ class PreProcessing:
 		)
 		idx = 0
 		for imgv in t3:
+			misc.imsave("patches/work{0}.png".format(idx), imgv)
+			print imgv
 			self.get_patch(imgv,patches,idx)
 			idx += 1
 
@@ -215,7 +178,6 @@ class PreProcessing:
 	# Take in imgs and patches and 
 	def tmethod_patches(self, patches, tmethod):
 		number_of_imgs = patches.shape[0] / (self.stride * self.stride * 4)
-
 		res_patches = np.zeros(
 			(
 				self.stride * self.stride * 4,
@@ -296,17 +258,17 @@ class PreProcessing:
 		return patches
 
 	def spectral_matrices(self, covariances):
+		evect_t3, evals_t3, einv_t3 = self.eigens(covariances)
+		x = theano.shared(value=evect_t3)
+		y = theano.shared(value=evals_t3)
+		z = theano.shared(value=einv_t3)
+		return theano.scan(
+			fn=lambda x, y, z: x.dot(y).dot(z),
+			sequences=[x,y,z]
+		)
 
 
 	def covariance(self, sps, u):
-		cov_t3 = np.zeros(
-			(
-				sps.shape[0],
-				sps.shape[1] * sps.shape[2],
-				sps.shape[1] * sps.shape[2]
-			)
-		)
-
 		p = theano.shared(
 			value=sps,
 			name='p',
@@ -321,12 +283,73 @@ class PreProcessing:
 			
 		# (X - u)
 		dp = p - u
-		dp = dp.reshape((sps.shape[0], self.patch_size ** 2)).eval()
+		dp = dp.reshape((sps.shape[0], self.patch_size ** 2))
 
-		for i in range(sps.shape[0]):
-			cov_t3[i] = self.covariant_loop(dp[i])[0]
+		outer = theano.scan(
+			fn=lambda x: T.outer(x,x),
+			sequences=[dp]
+		)
 
-		return T.mean(cov_t3, axis=0)
+		return T.mean(outer[0], axis=0)
+
+	def whiten(self, spectral_matrices, norms):
+		number_of_imgs = norms.shape[0] / (self.stride * self.stride * 4)
+		spectral_matrices = spectral_matrices.eval()
+		norms_scan = np.zeros((
+			norms.shape[0],
+			norms.shape[1] ** 2
+		))
+		specs_scan = np.zeros((
+			(4 * number_of_imgs * self.stride **2),
+			spectral_matrices.shape[1],
+			spectral_matrices.shape[2]
+		))
+		inc=0
+		for i in self.idx:
+			for j in self.idx:
+				for img in range(number_of_imgs):
+					for q in range(4):
+						norms_scan[inc] = norms[self.map_patch_idx(img, q, i, j)].reshape((self.patch_size ** 2))
+						specs_scan[inc] = spectral_matrices[self.map_patch_idx(0,q,i,j)]
+						inc += 1
+		norms_scan = theano.shared(
+			value=norms_scan,
+			name='ns',
+			borrow=True
+		)
+
+		specs_scan = theano.shared(
+			value=specs_scan,
+			name='ss',
+			borrow=True
+		)
+
+		return theano.scan(
+			fn=lambda x, y: x.dot(y),
+			sequences=[specs_scan, norms_scan]
+		)
+		# norms = theano.shared(
+		# 	value=index,
+		# 	name='idx',
+		# 	borrow=True
+		# )
+
+		# specs = theano.shared(
+		# 	value=specs,
+		# 	name='specs',
+		# 	borrow=True
+		# )
+
+		# norms = theano.shared(
+		# 	value=specs,
+		# 	name='specs',
+		# 	borrow=True
+		# )
+
+		# return theano.scan(
+		# 	fn=lambda specs, norms: x.dot(y),
+		# 	sequences=[]
+		# )
 
 	def get_covariance_subs(self, patches, mean):
 		number_of_imgs = patches.shape[0] / (self.stride * self.stride * 4)
@@ -361,7 +384,3 @@ class PreProcessing:
 	# This applies a gaussian blur on our image
 	def blur(self, imgv):
 		return ndimage.gaussian_filter(imgv, self.sigma)
-
-	# Whitens and max-suppresses our image
-	def whiten(self, imgv):
-		return

@@ -24,11 +24,11 @@ class CharacterClass():
 			)
 		)
 
-		for _ in self.training:
+		for i in range(len(self.training)):
 			imgv = self.next_training()
 			imgv = pp.scale(imgv)
 			imgv = pp.blur(imgv)
-			t3 = np.append(t3,np.expand_dims(imgv,axis=0), axis=0)
+			t3[i] = imgv
 
 		return t3
 
@@ -61,7 +61,7 @@ class CharacterClass():
 		for _ in self.test:
 			imgv = self.next_test()
 			imgv = pp.scale(imgv)
-			imgv = pp.blur(imgv)
+			#imgv = pp.blur(imgv)
 			t3 = np.append(t3,np.expand_dims(imgv,axis=0), axis=0)
 
 		return t3

@@ -13,7 +13,7 @@ from theano import function
 
 import numpy as np
 
-a = NOFont.NOFont(.01,.4)
+a = NOFont.NOFont(.001,.4)
 b = NOHandwritting.NOHandwritting(.01,.4)
 
 assert a.get_classpath('a') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample037'
@@ -23,7 +23,7 @@ assert a.get_classpath('0') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sa
 assert a.get_classpath('A') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample011'
 
 csetA = a.get_characterset('A')
-
+print "Number of training images"
 # We instantiate our image preprocessor
 pp = ImgPP(size=32, patch_size=8, sigma=1.3, resolution=4)
 
@@ -41,13 +41,18 @@ s = theano.shared(
 	name='s',
 	borrow=True
 )
-std_patches = T.maximum(s,.01).eval()
+std_patches = T.maximum(s,.0000001).eval()
 print "Normalizing patches"
 normalized_patches = pp.normalize(patches,mean_patches,std_patches)
 print "Get covariant matrices"
 covariant = pp.get_covariance_subs(normalized_patches, mean_patches)
-print covariant[0]
-spectral_matrices = pp.spectral_matrices(covariant)
+print "Retrieving spectral matrices"
+spectral_matrices = pp.spectral_matrices(covariant)[0]
+print "Applying whitening and centering"
+whitened_patches = pp.whiten(spectral_matrices, normalized_patches)[0].eval()
+print "Whitening successful! Lets do some unsuppervised learning!!!"
+for i in range(len(csetA.training)):
+	misc.imsave('patches/letter{0}.png'.format(i), t3[i])
 # variance_patches = pp.variance(patches, mean_patches)
 # centered_patches = pp.center(mean_patches)
 # whitened_filters = pp.whiten(cenetered_patches)
