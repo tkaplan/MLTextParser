@@ -1,6 +1,8 @@
 from scipy import ndimage
 from scipy import misc
 
+import theano
+
 import numpy as np
 
 class CharacterClass():
@@ -21,7 +23,8 @@ class CharacterClass():
 				len(self.training),
 				32,
 				32
-			)
+			),
+			dtype=theano.config.floatX
 		)
 
 		for i in range(len(self.training)):
@@ -38,7 +41,8 @@ class CharacterClass():
 				len(self.balidation),
 				32,
 				32
-			)
+			),
+			dtype=theano.config.floatX
 		)
 
 		for _ in self.validation:
@@ -55,7 +59,8 @@ class CharacterClass():
 				len(self.test),
 				32,
 				32
-			)
+			),
+			dtype=theano.config.floatX
 		)
 
 		for _ in self.test:

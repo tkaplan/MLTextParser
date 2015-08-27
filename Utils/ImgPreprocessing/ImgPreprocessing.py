@@ -27,7 +27,8 @@ class PreProcessing:
 				self.stride * 4,
 				self.patch_size ** 2,
 				self.patch_size ** 2	
-			)
+			),
+			dtype=theano.config.floatX
 		)
 
 		self.covariant_loop = self.__build_covariant_loop()
@@ -130,32 +131,11 @@ class PreProcessing:
 				y = j
 				yc = self.size-j-self.patch_size
 
-				print "###############"
-				print "Photo coo:"
-				print "x:+x {0}:{1}".format(x,x+self.patch_size)
-				print "xc:+xc {0}:{1}".format(xc,xc+self.patch_size)
-				print "y:+y {0}:{1}".format(y,y+self.patch_size)
-				print "yc: {0}:{1}".format(yc,yc+self.patch_size)
-				print "###############"
-				print "INDEX"
-				print self.map_patch_idx(img_idx,0,i,j)
-				print self.map_patch_idx(img_idx,1,i,j)
-				print self.map_patch_idx(img_idx,2,i,j)
-				print self.map_patch_idx(img_idx,3,i,j)
-
 				# Append patch 0 to tensor
 				patch_tensor[self.map_patch_idx(img_idx,0,i,j)] = imgv[x:x+self.patch_size,y:y+self.patch_size]		
-				misc.imsave("patches/debug{}.png".format(self.map_patch_idx(img_idx,0,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
-				misc.imsave("patches/debug{}-0.png".format(self.map_patch_idx(img_idx,0,i,j)), imgv[x:x+self.patch_size,y:y+self.patch_size])
 				patch_tensor[self.map_patch_idx(img_idx,1,i,j)] = imgv[xc:xc+self.patch_size,y:y+self.patch_size]
-				misc.imsave("patches/debug{}.png".format(self.map_patch_idx(img_idx,1,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
-				misc.imsave("patches/debug{}-1.png".format(self.map_patch_idx(img_idx,1,i,j)), imgv[xc:xc+self.patch_size,y:y+self.patch_size])
 				patch_tensor[self.map_patch_idx(img_idx,2,i,j)] = imgv[x:x+self.patch_size, yc:yc+self.patch_size]
-				misc.imsave("patches/debug{}.png".format(self.map_patch_idx(img_idx,2,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
-				misc.imsave("patches/debug{}-2.png".format(self.map_patch_idx(img_idx,2,i,j)), imgv[x:x+self.patch_size,yc:yc+self.patch_size])
 				patch_tensor[self.map_patch_idx(img_idx,3,i,j)] = imgv[xc:xc+self.patch_size ,yc:yc+self.patch_size]
-				misc.imsave("patches/debug{}-3.png".format(self.map_patch_idx(img_idx,3,i,j)), patch_tensor[self.map_patch_idx(img_idx,0,i,j)])
-				misc.imsave("patches/debug{}-0.png".format(self.map_patch_idx(img_idx,3,i,j)), imgv[xc:xc+self.patch_size,yc:yc+self.patch_size])
 		return patch_tensor
 				
 	def get_patches(self, t3):
@@ -164,12 +144,11 @@ class PreProcessing:
 				self.map_patch_idx(1,0,0,0) * t3.shape[0],
 				8,
 				8
-			)
+			),
+			dtype=theano.config.floatX
 		)
 		idx = 0
 		for imgv in t3:
-			misc.imsave("patches/work{0}.png".format(idx), imgv)
-			print imgv
 			self.get_patch(imgv,patches,idx)
 			idx += 1
 
@@ -265,7 +244,7 @@ class PreProcessing:
 		return theano.scan(
 			fn=lambda x, y, z: x.dot(y).dot(z),
 			sequences=[x,y,z]
-		)
+		)[0]
 
 
 	def covariance(self, sps, u):
@@ -292,18 +271,25 @@ class PreProcessing:
 
 		return T.mean(outer[0], axis=0)
 
+	# Returns whitened patches 1-d vectors
 	def whiten(self, spectral_matrices, norms):
 		number_of_imgs = norms.shape[0] / (self.stride * self.stride * 4)
 		spectral_matrices = spectral_matrices.eval()
-		norms_scan = np.zeros((
+		norms_scan = np.zeros(
+			(
 			norms.shape[0],
 			norms.shape[1] ** 2
-		))
-		specs_scan = np.zeros((
-			(4 * number_of_imgs * self.stride **2),
-			spectral_matrices.shape[1],
-			spectral_matrices.shape[2]
-		))
+			),
+			dtype=theano.config.floatX
+		)
+		specs_scan = np.zeros(
+			(
+				(4 * number_of_imgs * self.stride **2),
+				spectral_matrices.shape[1],
+				spectral_matrices.shape[2]
+			),
+			dtype=theano.config.floatX
+		)
 		inc=0
 		for i in self.idx:
 			for j in self.idx:
@@ -327,7 +313,7 @@ class PreProcessing:
 		return theano.scan(
 			fn=lambda x, y: x.dot(y),
 			sequences=[specs_scan, norms_scan]
-		)
+		)[0]
 		# norms = theano.shared(
 		# 	value=index,
 		# 	name='idx',
@@ -360,7 +346,8 @@ class PreProcessing:
 				4 * (self.stride ** 2),
 				self.patch_size ** 2,
 				self.patch_size ** 2
-			)
+			),
+			dtype=theano.config.floatX
 		)
 		# used for single filter mean
 		sub_patches = np.zeros(
