@@ -11,6 +11,7 @@ import theano
 from theano import tensor as T
 from theano import function
 
+import Learning.Supervised as l_s
 import Learning.Unsupervised as l_u
 
 import numpy as np
@@ -25,9 +26,12 @@ assert a.get_classpath('0') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sa
 assert a.get_classpath('A') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample011'
 
 csetA = a.get_characterset('A')
+
+img_shape = (32, 32)
+
 print "Number of training images"
 # We instantiate our image preprocessor
-pp = ImgPP(size=32, patch_size=8, sigma=1.2, resolution=4)
+pp = ImgPP(size=img_shape[0], patch_size=8, sigma=1.2, resolution=4)
 
 # KSphere with 96 filters and 10 iterations
 ks_96 = l_u.KSphere(96, 10)
@@ -35,6 +39,7 @@ ks_96 = l_u.KSphere(96, 10)
 # t3 data blurred
 print "Building data set"
 t3 = csetA.t3_training(pp)
+print t3.shape
 print "Retrieving patches"
 patches = pp.get_patches(t3)
 print "Building mean patches"
@@ -56,7 +61,25 @@ spectral_matrices = pp.spectral_matrices(covariant)
 print "Applying whitening and centering"
 whitened_patches = pp.whiten(spectral_matrices, normalized_patches)
 print "Whitening successful! Lets do some unsuppervised learning!!!"
-ks_96.spherical_k(whitened_patches)
+# Returns matrix of 2d matrix
+D_Filters = ks_96.spherical_k(whitened_patches)
+print "Convolve"
+conv0 = l_s.Convolution.withFilters(
+	image_shape=img_shape,
+	filters=D_Filters.reshape((96,8,8))
+)
+
+test_img = theano.shared(
+	value=t3[0],
+	borrow=True,
+	name='t_i'
+)
+convolution = conv0.compute(test_img)
+print "Pool"
+pool0 = l_s.Pool((2,2))
+pool = pool0.compute(convolution)
+print pool.shape.eval() 
+
 # variance_patches = pp.variance(patches, mean_patches)
 # centered_patches = pp.center(mean_patches)
 # whitened_filters = pp.whiten(cenetered_patches)

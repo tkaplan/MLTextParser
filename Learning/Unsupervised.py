@@ -5,20 +5,13 @@ import numpy as np
 
 import math
 
-import logging
+import dev_logger
 
 class KSphere:
 	def __init__(self, d_size, iterations):
 		np.set_printoptions(threshold='nan')
 		# Set up file handler for file logging
-		file_handler = logging.FileHandler('KSphere.log')
-		file_handler.setLevel(logging.INFO)
-		fh_fmt = logging.Formatter("%(asctime)s (%(levelname)s)\t: %(message)s")
-		file_handler.setFormatter(fh_fmt)
-		self.logger = logging.getLogger(__name__)
-		self.logger.addHandler(file_handler)
-		self.logger.setLevel(logging.INFO)
-
+		self.logger = dev_logger.logger(__name__ + "KSPhere")
 
 		self.d_size = d_size
 		self.iterations = iterations
@@ -158,6 +151,7 @@ class KSphere:
 
 			self.D_t2 = self.__normalize_matrix(D_SH)
 			self.logger.debug(self.D_t2.eval())
+			return self.D_t2
 
 	def opt_s(self, j):
 		return None
