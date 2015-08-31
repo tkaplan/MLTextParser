@@ -74,12 +74,17 @@ test_img = theano.shared(
 	borrow=True,
 	name='t_i'
 )
-convolution = conv0.compute(test_img)
+feature_maps0 = conv0.compute(test_img)
 print "Pool"
 pool0 = l_s.Pool((2,2))
-pool = pool0.compute(convolution)
-print pool.shape.eval() 
+pool_out0 = pool0.compute(feature_maps0)
 
+# Convert pool_out0 to single array output, this will feed
+# directly into our binary softmax classifier
+print "Getting hidden0"
+hidden0 = l_s.HL(pool_out0.flatten(), 2)
+print "We have hidden layer!!!"
+print hidden0.W.sum().eval()
 # variance_patches = pp.variance(patches, mean_patches)
 # centered_patches = pp.center(mean_patches)
 # whitened_filters = pp.whiten(cenetered_patches)
