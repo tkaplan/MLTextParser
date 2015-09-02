@@ -13,7 +13,7 @@ class Convolution:
 		self.W = filters
 		self.b = theano.shared(
 			value=np.zeros(
-			(filter_shape[1]),
+			(filter_shape[0]),
 			dtype=theano.config.floatX
 		), borrow=True)
 		self.image_shape = image_shape
@@ -65,6 +65,9 @@ class Convolution:
 		return cls(filter_shape, image_shape, filters)
 
 	def compute(self, input):
+		print "convolving man"
+		print input.eval()
+
 		results = conv.conv2d(
 			input=input,
 			filters=self.W,
@@ -72,7 +75,13 @@ class Convolution:
 			image_shape=self.image_shape
 		)
 
+		print "Printed convolve man"
+		print results.eval()
+		print results.shape.eval()
+		print self.b.shape.eval()
 		self.output = T.tanh(results + self.b.dimshuffle('x',0,'x','x'))
+		print "output via activation yo"
+		print self.output.eval()
 		return self.output
 
 class Pool:
@@ -80,12 +89,46 @@ class Pool:
 		self.shape = shape
 
 	def compute(self, input):
+		print "Pooling yo"
+		print input.eval()
+		print input.shape.eval()
 		self.output = downsample.max_pool_2d(
 			input=input,
 			ds=self.shape,
 			ignore_border=True
 		)
 		return self.output
+
+class Cross_Entropy:
+	def __init__(self):
+		return None
+
+class L2_Regularization:
+	def __init__(self, learning_rate=0.01, L2=0.001):
+		
+		self.learning_rate = learning_rate
+		self.L2 = L2
+
+	def set_batch_size(self, batch_size):
+		self.batch_size = batch_size
+
+	def set_layer(self, layer):
+		self.layer = layer
+
+	def update(self):
+		W = self.layer.W
+		b = self.layer.b
+
+		batch_size = self.batch_size
+		
+		d_W = self.layer.delta_W
+		d_b = self.layer.delta_b
+
+		learning_rate = self.learning_rate
+		L2 = self.L2
+
+		self.layer.W = W - d_W * learning_rate - (learning_rate * L2 * W) / batch_size
+		self.layer.b = b - d_W * learning_rate
 
 """
 With our fully connected layer our 2D image is converted
@@ -98,10 +141,21 @@ and add bias.
 {output : weight array (convert 2d array to 1d array)}
 """
 class HL:
-	def __init__(self, input, n_out, W=None, b=None, cost=LogisticRegression, activation=T.tanh):
+	def __init__(
+		self,
+		input,
+		n_out,
+		learn,
+		W=None,
+		b=None,
+		activation=T.tanh
+    	):
 		rng = np.random.RandomState()
 
 		n_in = input.shape[0].eval()
+
+		print "Input shape yo"
+		print input.eval()
 
 		if W is None:
 			W_values = np.asarray(
@@ -126,14 +180,39 @@ class HL:
 		self.b = b
 
 		lin_output = T.dot(input, self.W) + self.b
+
+		print "lin_output"
+		print lin_output.eval()
+
 		self.output = (
 			lin_output if activation is None
 			else activation(lin_output)
 		)
+
+		print "Shape of our output is"
+		print self.output.shape[0].eval()
+
+		self.activation_jacobian_W = theano.gradient.jacobian(self.output, self.W)
+		self.activation_jacobian_b = theano.gradient.jacobian(self.output, self.b)
+
+		print "Our jacobian shape is"
+		#print self.activation_jacobian_W.shape.eval()
+		print self.output.eval()
+
 		self.params = [self.W, self.b]
 
-	def backpropagate(self, delta):
-		self.W
+		self.learn = learn.set_layer(self)
+
+	def backpropagate(self, delta_W, delta_b):
+		self.delta_W = T.batched_dot(delta_W,self.activation_jacobian_W)
+		self.delta_b = T.batched_dot(delta_b,self.activation_jacobian_b)
+		
+		# Because we passed in self, we can just
+		# have our learning algorithm update the
+		# bias and weights for us
+		self.learn.update()
+		return (self.delta_W, self.delta_b)
+
 
 class LogisticRegression(object):
 	"""Multi-class logistric regression class

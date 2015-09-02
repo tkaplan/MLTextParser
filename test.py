@@ -18,6 +18,7 @@ import numpy as np
 
 a = NOFont.NOFont(.1,.4)
 b = NOHandwritting.NOHandwritting(.01,.4)
+batch_size = 600
 
 assert a.get_classpath('a') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample037'
 assert a.get_classpath('9') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample010'
@@ -82,7 +83,11 @@ pool_out0 = pool0.compute(feature_maps0)
 # Convert pool_out0 to single array output, this will feed
 # directly into our binary softmax classifier
 print "Getting hidden0"
-hidden0 = l_s.HL(pool_out0.flatten(), 2)
+
+l2_reg0 = l_s.L2_Regularization()
+print "pool_out0"
+print pool_out0.eval()
+hidden0 = l_s.HL(pool_out0.flatten(), 2, l2_reg0)
 print "We have hidden layer!!!"
 print hidden0.W.sum().eval()
 # variance_patches = pp.variance(patches, mean_patches)
