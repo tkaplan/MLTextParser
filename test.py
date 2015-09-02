@@ -85,11 +85,20 @@ pool_out0 = pool0.compute(feature_maps0)
 print "Getting hidden0"
 
 l2_reg0 = l_s.L2_Regularization()
-print "pool_out0"
-print pool_out0.eval()
-hidden0 = l_s.HL(pool_out0.flatten(), 2, l2_reg0)
-print "We have hidden layer!!!"
-print hidden0.W.sum().eval()
+
+hidden0 = l_s.FCLayer(
+	pool_out0.flatten(),
+	10,
+	l2_reg0
+)
+
+cross_entropy = l_s.Cross_Entropy()
+
+output = l_s.FCLayer(
+	hidden0.output,
+	2,
+	cross_entropy
+)
 # variance_patches = pp.variance(patches, mean_patches)
 # centered_patches = pp.center(mean_patches)
 # whitened_filters = pp.whiten(cenetered_patches)

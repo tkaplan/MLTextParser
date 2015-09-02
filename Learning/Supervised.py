@@ -100,8 +100,30 @@ class Pool:
 		return self.output
 
 class Cross_Entropy:
-	def __init__(self):
-		return None
+	def __init__(self, learning_rate=0.01, L2=0.001):
+		self.learning_rate = learning_rate
+		self.L2 = L2
+
+	def set_batch_size(self, batch_size):
+		self.batch_size = batch_size
+
+	def set_layer(self, layer):
+		self.layer = layer
+
+	def update(self):
+		W = self.layer.W
+		b = self.layer.b
+
+		batch_size = self.batch_size
+		
+		d_W = self.layer.delta_W
+		d_b = self.layer.delta_b
+
+		learning_rate = self.learning_rate
+		L2 = self.L2
+
+		self.layer.W = W - d_W * learning_rate - (learning_rate * L2 * W) / batch_size
+		self.layer.b = b - d_W * learning_rate
 
 class L2_Regularization:
 	def __init__(self, learning_rate=0.01, L2=0.001):
@@ -140,7 +162,7 @@ and add bias.
 :type n_out: this is matrix of weight values per output
 {output : weight array (convert 2d array to 1d array)}
 """
-class HL:
+class FCLayer:
 	def __init__(
 		self,
 		input,
@@ -148,14 +170,14 @@ class HL:
 		learn,
 		W=None,
 		b=None,
+		cost=None,
 		activation=T.tanh
     	):
+		self.activation = activation
 		rng = np.random.RandomState()
+		self.cost = cost
 
 		n_in = input.shape[0].eval()
-
-		print "Input shape yo"
-		print input.eval()
 
 		if W is None:
 			W_values = np.asarray(
@@ -203,6 +225,38 @@ class HL:
 
 		self.learn = learn.set_layer(self)
 
+	def get_output(self, input):
+		lin_output = T.dot(input, self.W) + self.b
+
+		return (
+			lin_output if activation is None
+			else self.activation(lin_output)
+		)
+
+	"""
+	Takes in our inputs and spits out a whole bunch of predictions
+	and then returns a tuple consisting:
+
+	(avg_cost, jacobian_W, jacobian_b)
+	"""
+	def get_avg_cost(self, y, inputs):
+		# C = -(1/n)*Sum[yln(a) + (1-y)ln(1-a)]
+		predictions = scan.theano(
+			fn=lambda input: self.get_output(T.argmax(input)),
+			sequences=[inputs]
+		)
+		costs = theano.scan(
+			fn=lambda pred, y: y*T.log(pred) + (1-y)T.log(1-pred),
+			sequences=[predictions, y]
+		)[0]
+		avg_cost = costs.mean(costs)
+
+		return (
+			avg_cost,
+			theano.gradient.jacobian(avg_cost, self.W),
+			theano.gradient.jacobian(avg_cost, self.b)
+		)
+
 	def backpropagate(self, delta_W, delta_b):
 		self.delta_W = T.batched_dot(delta_W,self.activation_jacobian_W)
 		self.delta_b = T.batched_dot(delta_b,self.activation_jacobian_b)
@@ -212,94 +266,3 @@ class HL:
 		# bias and weights for us
 		self.learn.update()
 		return (self.delta_W, self.delta_b)
-
-
-class LogisticRegression(object):
-	"""Multi-class logistric regression class
-	"""
-	def __init__(self, input, n_in, n_out):
-		""" Initialize the parameters of the logistic regression
-		"""
-		self.W = theano.shared(
-			value=numpy.zeros(
-				(n_in, n_out),
-				dtype=theano.config.floatX
-			),
-			name='W',
-			borrow=True
-		)
-
-		self.b = theano.shared(
-			value=numpy.zeros(
-				(n_out,),
-				dtype=theano.config.floatX
-			),
-			name='b',
-			borrow=True
-		)
-
-		self.p_y_given_x = T.nnet.softmax(T.dot(input, self.W) + self.b)
-		self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-		self.params = [self.W, self.b]
-		self.input = input
-		return self.y_pred
-
-	def negative_log_likelihood(self, y):
-		return -T.mean(T.log(self.p_y_given_x)[T.arange(y.shape[0]), y])
-
-	def errors(self, y):
-		if y.ndim != self.y_pred.ndim:
-			raise TypeError(
-				('y', y.type, 'y_pred', self.y_pred.type)
-			)
-		if y.dtype.startswith('int'):
-			return T.mean(T.neq(self.y_pred, y))
-		else:
-			raise NotImplementedError()
-
-class MLP(object):
-	"""Multi-Layer Perceptron class
-
-	A multilayer perceptron is a feedforward artificial neural network model
-	that has one layer or more of hidden units and nonlinear activations.
-	Intermediate layers usually have as activation function tanh or the
-	sigmoid function (defined here by a ''HiddenLayer'' class) whie the
-	top layer is a softmax layer (defined here by a ''Logisticregression''
-	class).
-	"""
-
-	def __init__(self, rng, input, n_in, n_hidden, n_out):
-		"""Initialize the parameters for the multilayer perceptron
-
-		"""
-		self.hiddenLayer = HiddenLayer(
-			rng=rng,
-			input=input,
-			n_out=n_hidden,
-			activation=T.tanh
-		)
-
-		self.logRegressionLayer = LogisticRegression(
-			input=self.hiddenLayer.output,
-			n_out=n_out
-		)
-
-		self.L1 = (
-			abs(self.hiddenLayer.W).sum()
-			+ abs(self.logRegressionLayer.W).sum()
-		)
-
-		self.L2_sqr = (
-			(self.hiddenLayer.W ** 2).sum()
-			+ (self.logRegressionLayer.W ** 2).sum()
-		)
-
-		self.negative_log_likelihood = (
-			self.logRegressionLayer.negative_log_likelihood
-		)
-
-		self.errors = self.logRegressionLayer.errors
-
-		self.params = self.hiddenLayer.params + self.logRegressionLayer.params
-
-		self.input = input
