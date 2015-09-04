@@ -18,6 +18,7 @@ class Convolution:
 		), borrow=True)
 		self.image_shape = image_shape
 		self.filter_shape = filter_shape
+		self.params = [self.W, self.b]
 
 	"""
 	:type filters: 3rd or second rank tensor
@@ -168,6 +169,7 @@ class FCLayer:
 
 		self.W = W
 		self.b = b
+		self.params = [self.W, self.b]
 
 	def get_output(self, input):
 		lin_output = T.dot(input, self.W) + self.b

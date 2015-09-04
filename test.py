@@ -13,6 +13,7 @@ from theano import function
 
 import Learning.Supervised as l_s
 import Learning.Unsupervised as l_u
+import Learning.Costs as costs
 
 import numpy as np
 
@@ -123,5 +124,34 @@ soft0 = l_s.FCLayer(
 
 output = soft0.get_output(fc0_out)
 
-print output.eval()
+params = soft0.params + fc0.params + conv0.params
+
+cost = costs.cross_entropy(output)
+
+y = theano.shared(
+		value=np.ones(
+			(t3.shape[0]),
+			dtype=np.int32
+		),
+		borrow=True
+	)
+
+grads = T.grad(cost(y), params)
+
+updates = [
+	(param_i, param_i - .001 * grad_i)
+	for param_i, grad_i in zip(params, grads)
+]
+
+index = T.lscalar()
+
+train_model = theano.function(
+    inputs=[index],
+    outputs=cost,
+    updates=updates,
+    givens={
+      x: t3_shared[index * batch_size: (index + 1) * batch_size],
+      y: y[index * batch_size: (index + 1) * batch_size]
+    }
+  )
 
