@@ -40,7 +40,14 @@ ks_96 = l_u.KSphere(96, 10)
 # t3 data blurred
 print "Building data set"
 t3 = csetA.t3_training(pp)
-print t3.shape
+t3_shared = theano.shared(
+	value=np.asarray(
+          t3,
+          dtype=theano.config.floatX
+    ),
+    borrow=True
+)
+
 print "Retrieving patches"
 patches = pp.get_patches(t3)
 print "Building mean patches"
@@ -53,63 +60,68 @@ s = theano.shared(
 	borrow=True
 )
 std_patches = T.maximum(s,.0000001).eval()
+
 print "Normalizing patches"
 normalized_patches = pp.normalize(patches,mean_patches,std_patches)
+
 print "Get covariant matrices"
 covariant = pp.get_covariance_subs(normalized_patches, mean_patches)
+
 print "Retrieving spectral matrices"
 spectral_matrices = pp.spectral_matrices(covariant)
+
 print "Applying whitening and centering"
 whitened_patches = pp.whiten(spectral_matrices, normalized_patches)
+
 print "Whitening successful! Lets do some unsuppervised learning!!!"
 # Returns matrix of 2d matrix
 D_Filters = ks_96.spherical_k(whitened_patches)
-print "Convolve"
+
+print "Convolve0"
 conv0 = l_s.Convolution.withFilters(
-	image_shape=img_shape,
+	image_shape=t3.shape,
 	filters=D_Filters.reshape((96,8,8))
 )
+feature_maps0 = conv0.get_output(t3_shared)
 
-test_img = theano.shared(
-	value=t3[0],
-	borrow=True,
-	name='t_i'
-)
-feature_maps0 = conv0.compute(test_img)
-print "Pool"
+print "Pool0"
 pool0 = l_s.Pool((2,2))
-pool_out0 = pool0.compute(feature_maps0)
+pool_out0 = pool0.get_output(feature_maps0)
+pool_out0 = pool_out0.flatten()
+
+# print "Convolve1"
+# conv1 = l_s.Convolution.withoutFilters(
+# 	image_shape=tuple(pool_out0.shape.eval()),
+# 	filter_shape=(pool_out0.shape[0].eval(),5,4,4)
+# )
+# feature_maps1 = conv1.get_output(pool_out0)
+
+# print "Pool1"
+# pool1 = l_s.Pool((2,2))
+# pool_out1 = pool1.get_output(feature_maps1)
+# fc_input = pool_out1.flatten()
+
+# print fc_input.shape.eval()
+# print fc_input.eval()
 
 # Convert pool_out0 to single array output, this will feed
 # directly into our binary softmax classifier
-print "Getting hidden0"
-
-l2_reg0 = l_s.L2_Regularization()
-
-hidden0 = l_s.FCLayer(
-	pool_out0.flatten(),
-	10,
-	l2_reg0
+print "FCLayer 0"
+fc0 = l_s.FCLayer(
+	pool_out0.shape[0].eval(),
+	500
 )
 
-cross_entropy = l_s.Cross_Entropy()
+fc0_out = fc0.get_output(pool_out0)
 
-output = l_s.FCLayer(
-	hidden0.output,
+print "Get softmax output"
+soft0 = l_s.FCLayer(
+	500,
 	2,
-	cross_entropy
+	activation=T.nnet.softmax
 )
-# variance_patches = pp.variance(patches, mean_patches)
-# centered_patches = pp.center(mean_patches)
-# whitened_filters = pp.whiten(cenetered_patches)
 
-# Now we are ready to run our k-means regression
-# on our whitened filters
+output = soft0.get_output(fc0_out)
 
+print output.eval()
 
-# imgv = csetA.next_training()
-# imgv = pp.scale(imgv)
-# imgv = pp.blur(imgv)
-# print imgv.shape
-# print pp.get_patch(imgv)
-#print t3.shape
