@@ -31,7 +31,7 @@ csetA = a.get_characterset('A')
 
 img_shape = (32, 32)
 
-print "Number of training images"
+print("Number of training images")
 # We instantiate our image preprocessor
 pp = ImgPP(size=img_shape[0], patch_size=8, sigma=1.2, resolution=4)
 
@@ -39,7 +39,7 @@ pp = ImgPP(size=img_shape[0], patch_size=8, sigma=1.2, resolution=4)
 ks_96 = l_u.KSphere(96, 10)
 
 # t3 data blurred
-print "Building data set"
+print("Building data set")
 t3 = csetA.t3_training(pp)
 t3_shared = theano.shared(
 	value=np.asarray(
@@ -49,11 +49,11 @@ t3_shared = theano.shared(
     borrow=True
 )
 
-print "Retrieving patches"
+print("Retrieving patches")
 patches = pp.get_patches(t3)
-print "Building mean patches"
+print("Building mean patches")
 mean_patches = pp.tmethod_patches(patches, T.mean)
-print "Building std patches"
+print("Building std patches")
 std_patches = pp.tmethod_patches(patches, T.std)
 s = theano.shared(
 	value=std_patches,
@@ -62,30 +62,30 @@ s = theano.shared(
 )
 std_patches = T.maximum(s,.0000001).eval()
 
-print "Normalizing patches"
+print("Normalizing patches")
 normalized_patches = pp.normalize(patches,mean_patches,std_patches)
 
-print "Get covariant matrices"
+print("Get covariant matrices")
 covariant = pp.get_covariance_subs(normalized_patches, mean_patches)
 
-print "Retrieving spectral matrices"
+print("Retrieving spectral matrices")
 spectral_matrices = pp.spectral_matrices(covariant)
 
-print "Applying whitening and centering"
+print("Applying whitening and centering")
 whitened_patches = pp.whiten(spectral_matrices, normalized_patches)
 
-print "Whitening successful! Lets do some unsuppervised learning!!!"
+print("Whitening successful! Lets do some unsuppervised learning!!!")
 # Returns matrix of 2d matrix
 D_Filters = ks_96.spherical_k(whitened_patches)
 
-print "Convolve0"
+print("Convolve0")
 conv0 = l_s.Convolution.withFilters(
 	image_shape=t3.shape,
 	filters=D_Filters.reshape((96,8,8))
 )
 feature_maps0 = conv0.get_output(t3_shared)
 
-print "Pool0"
+print("Pool0")
 pool0 = l_s.Pool((2,2))
 pool_out0 = pool0.get_output(feature_maps0)
 pool_out0 = pool_out0.flatten()
@@ -107,7 +107,7 @@ pool_out0 = pool_out0.flatten()
 
 # Convert pool_out0 to single array output, this will feed
 # directly into our binary softmax classifier
-print "FCLayer 0"
+print("FCLayer 0")
 fc0 = l_s.FCLayer(
 	pool_out0.shape[0].eval(),
 	500
@@ -115,7 +115,7 @@ fc0 = l_s.FCLayer(
 
 fc0_out = fc0.get_output(pool_out0)
 
-print "Get softmax output"
+print("Get softmax output")
 soft0 = l_s.FCLayer(
 	500,
 	2,
