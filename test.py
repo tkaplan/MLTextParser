@@ -1,7 +1,7 @@
 import Utils.DataLoader.NOData.NOFont as NOFont
 import Utils.DataLoader.NOData.NOHandwritting as NOHandwritting
 
-import Utils.ImgPreprocessing.ImgPreprocessoring
+import Utils.ImgPreprocessing.ImgPreprocessing
 from Utils.ImgPreprocessing.ImgPreprocessing import PreProcessing as ImgPP
 
 import scipy.ndimage as ndimage
@@ -20,12 +20,6 @@ import numpy as np
 a = NOFont.NOFont(.1,.4)
 b = NOHandwritting.NOHandwritting(.01,.4)
 batch_size = 600
-
-assert a.get_classpath('a') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample037'
-assert a.get_classpath('9') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample010'
-assert a.get_classpath('8') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample009'
-assert a.get_classpath('0') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample001'
-assert a.get_classpath('A') == '/Users/tkaplan/MLTextParser/TrainingData/Font/Sample011'
 
 csetA = a.get_characterset('A')
 
@@ -145,13 +139,13 @@ updates = [
 
 index = T.lscalar()
 
-train_model = theano.function(
-    inputs=[index],
-    outputs=cost,
-    updates=updates,
-    givens={
-      x: t3_shared[index * batch_size: (index + 1) * batch_size],
-      y: y[index * batch_size: (index + 1) * batch_size]
-    }
-  )
+# train_model = theano.function(
+#     inputs=[index],
+#     outputs=cost,
+#     updates=updates,
+#     givens={
+#       x: t3_shared[index * batch_size: (index + 1) * batch_size],
+#       y: y[index * batch_size: (index + 1) * batch_size]
+#     }
+#   )
 

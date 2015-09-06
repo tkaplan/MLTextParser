@@ -7,9 +7,9 @@ import math
 
 import dev_logger
 
-class KSphere:
+class KSphere(object):
 	def __init__(self, d_size, iterations):
-		np.set_printoptions(threshold='nan')
+		np.set_printoptions(threshold=np.nan)
 		# Set up file handler for file logging
 		self.logger = dev_logger.logger(__name__ + "KSPhere")
 

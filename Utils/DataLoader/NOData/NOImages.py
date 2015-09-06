@@ -1,4 +1,4 @@
-from NOData import NOBase
+from Utils.DataLoader.NOData.NOData import NOBase
 from os import path
 
 class NOHandwritting(NOBase):

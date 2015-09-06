@@ -5,7 +5,7 @@ import theano
 
 import numpy as np
 
-class Convolution:
+class Convolution(object):
 	"""
 	In: tuple of (images) 
 	"""
@@ -25,6 +25,13 @@ class Convolution:
 	"""
 	@classmethod
 	def withFilters(cls, image_shape, filters):
+		print("####")
+		print("####")
+		print("####")
+		print(filters.shape.eval())
+		print("####")
+		print("####")
+		print("####")
 		filter_shape = tuple(filters.shape.eval())
 		return cls(filter_shape, image_shape, filters)
 
@@ -92,7 +99,7 @@ class Convolution:
 		self.learn.update()
 		return (self.delta_W, self.delta_b)
 
-class Pool:
+class Pool(object):
 	def __init__(self, shape):
 		self.shape = shape
 
@@ -131,7 +138,7 @@ and add bias.
 :type n_out: this is matrix of weight values per output
 {output : weight array (convert 2d array to 1d array)}
 """
-class FCLayer:
+class FCLayer(object):
 	def __init__(
 		self,
 		n_in,

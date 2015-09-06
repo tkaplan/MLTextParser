@@ -3,7 +3,7 @@ import os.path as path
 import Utils.DataLoader.CharacterClass as cc
 import random
 
-class NOBase:
+class NOBase(object):
 	# training: 0 < float < 1
 	# validation: 0 < float < 1
 	# training + validation =< 1

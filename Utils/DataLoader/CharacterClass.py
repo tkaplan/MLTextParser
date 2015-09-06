@@ -5,7 +5,7 @@ import theano
 
 import numpy as np
 
-class CharacterClass():
+class CharacterClass(object):
 
 	def __init__(self, character, files, training, validation, test):
 		self.character = character
@@ -31,6 +31,7 @@ class CharacterClass():
 			imgv = self.next_training()
 			imgv = pp.scale(imgv)
 			imgv = pp.blur(imgv)
+
 			t3[i] = imgv
 
 		return t3
@@ -73,17 +74,17 @@ class CharacterClass():
 
 	def next_training(self):
 		# Get file to load
-		return misc.imread(self.training_it.next())
+		return misc.imread(next(self.training_it))
 
 	def next_validation(self):
 		# Get file to load
-		return misc.imread(self.validation_it.next())
+		return misc.imread(next(self.validation_it))
 
 	def next_test(self):
 		# Get file to load
-		return misc.imread(self.test_it.next())
+		return misc.imread(next(self.test_it))
 
 	def reset(self):
-		self.trainingIter = iter(self.training_it)
-		self.validationIter = iter(self.validation_it)
-		self.test = iter(self.test_it)
+		self.trainingIter = iter(self.training)
+		self.validationIter = iter(self.validation)
+		self.test = iter(self.test)

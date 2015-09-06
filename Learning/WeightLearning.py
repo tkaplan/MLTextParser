@@ -3,7 +3,7 @@ import theano.tensor as T
 
 import numpy as np
 
-class L2_Regularization:
+class L2_Regularization(object):
 	def __init__(self, learning_rate=0.01, L2=0.001):
 		self.learning_rate = learning_rate
 		self.L2 = L2

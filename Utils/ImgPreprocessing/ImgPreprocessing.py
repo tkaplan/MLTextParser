@@ -19,7 +19,7 @@ class PreProcessing:
 		self.patch_size = patch_size
 		self.norm = self.__build_center()
 
-		self.idx = [x for x in range((self.size / 2) - (self.patch_size / 2)) if x % self.resolution == 0]
+		self.idx = [x for x in range(int((self.size / 2) - (self.patch_size / 2))) if x % self.resolution == 0]
 		self.stride = len(self.idx)
 
 		self.cov_matrix = np.zeros(
@@ -179,7 +179,7 @@ class PreProcessing:
 		for i in self.idx:
 			for j in self.idx:
 				for sb_idx in range(4):
-					for img_idx in range(number_of_imgs):
+					for img_idx in range(int(number_of_imgs)):
 						sub_patch = patches[self.map_patch_idx(img_idx,sb_idx,i,j)]
 					sb = theano.shared(
 						value=sub_patch,
@@ -204,7 +204,7 @@ class PreProcessing:
 	def normalize(self, patches, mean, std):
 		number_of_imgs = patches.shape[0] / (self.stride * self.stride * 4)
 		map_patch_idx = self.map_patch_idx
-		for img_idx in range(number_of_imgs):
+		for img_idx in range(int(number_of_imgs)):
 			for i in self.idx:
 				for j in self.idx:
 					# Get u patches
@@ -293,7 +293,7 @@ class PreProcessing:
 		inc=0
 		for i in self.idx:
 			for j in self.idx:
-				for img in range(number_of_imgs):
+				for img in range(int(number_of_imgs)):
 					for q in range(4):
 						norms_scan[inc] = norms[self.map_patch_idx(img, q, i, j)].reshape((self.patch_size ** 2))
 						specs_scan[inc] = spectral_matrices[self.map_patch_idx(0,q,i,j)]
@@ -362,7 +362,7 @@ class PreProcessing:
 		for i in self.idx:
 			for j in self.idx:
 				for sb in range(4):
-					for img_idx in range(number_of_imgs):
+					for img_idx in range(int(number_of_imgs)):
 						sub_patches[img_idx] = patches[self.map_patch_idx(img_idx, 0, i, j)]
 						u = mean[self.map_patch_idx(0,sb,i,j)]
 					# Now we can calculate our covariance
