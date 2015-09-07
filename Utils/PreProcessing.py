@@ -98,32 +98,15 @@ class Patch(object):
 			raise Error("Resolution must be a whole number greater than 0 but less (img_size / 2 - patch_size / 2).")
 		self.size = size
 		self.resolution = resolution
-		self.sigma = sigma
 		self.patch_size = patch_size
 
 		self.idx = [x for x in range(int((self.size / 2) - (self.patch_size / 2))) if x % self.resolution == 0]
 		self.stride = len(self.idx)
 
-	def __get_patch(self, imgv, patch_tensor, img_idx):
-		idx = self.idx
-		for i in idx:
-			for j in idx:
-				x = i
-				xc = self.size-i-self.patch_size
-				y = j
-				yc = self.size-j-self.patch_size
-
-				# Append patch 0 to tensor
-				patch_tensor[self.map_patch_idx(img_idx,0,i,j)] = imgv[x:x+self.patch_size,y:y+self.patch_size]		
-				patch_tensor[self.map_patch_idx(img_idx,1,i,j)] = imgv[xc:xc+self.patch_size,y:y+self.patch_size]
-				patch_tensor[self.map_patch_idx(img_idx,2,i,j)] = imgv[x:x+self.patch_size, yc:yc+self.patch_size]
-				patch_tensor[self.map_patch_idx(img_idx,3,i,j)] = imgv[xc:xc+self.patch_size ,yc:yc+self.patch_size]
-		return patch_tensor
-				
-	def __get_patches(self, t3):
+	def get_patches(self, t3):
 		patches = np.empty(
 			(
-				self.map_patch_idx(1,0,0,0) * t3.shape[0],
+				self.__map_patch_idx(1,0,0,0) * t3.shape[0],
 				8,
 				8
 			),
@@ -139,8 +122,24 @@ class Patch(object):
 			borrow=True
 		)
 
+	def __get_patch(self, imgv, patch_tensor, img_idx):
+		idx = self.idx
+		for i in idx:
+			for j in idx:
+				x = i
+				xc = self.size-i-self.patch_size
+				y = j
+				yc = self.size-j-self.patch_size
+
+				# Append patch 0 to tensor
+				patch_tensor[self.__map_patch_idx(img_idx,0,i,j)] = imgv[x:x+self.patch_size,y:y+self.patch_size]		
+				patch_tensor[self.__map_patch_idx(img_idx,1,i,j)] = imgv[xc:xc+self.patch_size,y:y+self.patch_size]
+				patch_tensor[self.__map_patch_idx(img_idx,2,i,j)] = imgv[x:x+self.patch_size, yc:yc+self.patch_size]
+				patch_tensor[self.__map_patch_idx(img_idx,3,i,j)] = imgv[xc:xc+self.patch_size ,yc:yc+self.patch_size]
+		return patch_tensor
+
 	# i is row j is column
-	def map_patch_idx(self,img_idx, patch_idx, i, j):
+	def __map_patch_idx(self,img_idx, patch_idx, i, j):
 		stride = self.stride
 		idx = self.idx
 		return img_idx*stride*stride*4  + (i * stride * 4)/ self.resolution + (j * 4)/ self.resolution + patch_idx

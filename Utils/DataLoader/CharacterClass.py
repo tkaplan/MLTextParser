@@ -17,7 +17,16 @@ class CharacterClass(object):
 		self.validation_it = iter(self.validation)
 		self.test_it = iter(test)
 
-	def t3_training(self, pp):
+	def scale(self, imgv, size):
+		# We want to shorten by the largest dimmension
+		resize = size / float(imgv.shape[0]) if imgv.shape[0] > imgv.shape[1] else size / float(imgv.shape[1]) 
+		# We then resize the image
+		imresize = misc.imresize(imgv, resize, 'bilinear', 'P')
+		# The next step is to super impose this onto some background
+		# Or image, however we don't care to do that yet
+		return imresize
+
+	def t3_training(self, pp, size=32, sigma = None):
 		t3 = np.zeros(
 			(
 				len(self.training),
@@ -29,8 +38,9 @@ class CharacterClass(object):
 
 		for i in range(len(self.training)):
 			imgv = self.next_training()
-			imgv = pp.scale(imgv)
-			imgv = pp.blur(imgv)
+			imgv = self.scale(size, imgv)
+			if sigma != None:
+				imgv = ndimage.gaussian_filter(imgv, sigma)
 
 			t3[i] = imgv
 
