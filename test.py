@@ -30,7 +30,7 @@ print("Number of training images")
 pp = ImgPP(size=img_shape[0], patch_size=8, sigma=1.2, resolution=4)
 
 # KSphere with 96 filters and 10 iterations
-ks_96 = l_u.KSphere(96, 10)
+ks_115 = l_u.KSphere(115, 10)
 
 # t3 data blurred
 print("Building data set")
@@ -70,37 +70,24 @@ whitened_patches = pp.whiten(spectral_matrices, normalized_patches)
 
 print("Whitening successful! Lets do some unsuppervised learning!!!")
 # Returns matrix of 2d matrix
-D_Filters = ks_96.spherical_k(whitened_patches)
+D_Filters = ks_115.spherical_k(whitened_patches)
+
+# x is our input average
+x = T.matrix('x')
+y = T.ivector('y')
 
 print("Convolve0")
 conv0 = l_s.Convolution.withFilters(
 	image_shape=t3.shape,
 	filters=D_Filters.reshape((96,8,8))
 )
-feature_maps0 = conv0.get_output(t3_shared)
+feature_maps0 = conv0.get_output(x)
 
 print("Pool0")
 pool0 = l_s.Pool((2,2))
 pool_out0 = pool0.get_output(feature_maps0)
 pool_out0 = pool_out0.flatten()
 
-# print "Convolve1"
-# conv1 = l_s.Convolution.withoutFilters(
-# 	image_shape=tuple(pool_out0.shape.eval()),
-# 	filter_shape=(pool_out0.shape[0].eval(),5,4,4)
-# )
-# feature_maps1 = conv1.get_output(pool_out0)
-
-# print "Pool1"
-# pool1 = l_s.Pool((2,2))
-# pool_out1 = pool1.get_output(feature_maps1)
-# fc_input = pool_out1.flatten()
-
-# print fc_input.shape.eval()
-# print fc_input.eval()
-
-# Convert pool_out0 to single array output, this will feed
-# directly into our binary softmax classifier
 print("FCLayer 0")
 fc0 = l_s.FCLayer(
 	pool_out0.shape[0].eval(),
@@ -112,23 +99,15 @@ fc0_out = fc0.get_output(pool_out0)
 print("Get softmax output")
 soft0 = l_s.FCLayer(
 	500,
-	2,
+	62,
 	activation=T.nnet.softmax
 )
 
-output = soft0.get_output(fc0_out)
+output = T.argmax(soft0.get_output(fc0_out))
 
 params = soft0.params + fc0.params + conv0.params
 
 cost = costs.cross_entropy(output)
-
-y = theano.shared(
-		value=np.ones(
-			(t3.shape[0]),
-			dtype=np.int32
-		),
-		borrow=True
-	)
 
 grads = T.grad(cost(y), params)
 
@@ -139,13 +118,13 @@ updates = [
 
 index = T.lscalar()
 
-# train_model = theano.function(
-#     inputs=[index],
-#     outputs=cost,
-#     updates=updates,
-#     givens={
-#       x: t3_shared[index * batch_size: (index + 1) * batch_size],
-#       y: y[index * batch_size: (index + 1) * batch_size]
-#     }
-#   )
+train_model = theano.function(
+    inputs=[index],
+    outputs=cost,
+    updates=updates,
+    givens={
+      x: t3_shared[index * batch_size: (index + 1) * batch_size],
+      y: y[index * batch_size: (index + 1) * batch_size]
+    }
+  )
 

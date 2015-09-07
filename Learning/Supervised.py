@@ -25,13 +25,6 @@ class Convolution(object):
 	"""
 	@classmethod
 	def withFilters(cls, image_shape, filters):
-		print("####")
-		print("####")
-		print("####")
-		print(filters.shape.eval())
-		print("####")
-		print("####")
-		print("####")
 		filter_shape = tuple(filters.shape.eval())
 		return cls(filter_shape, image_shape, filters)
 
@@ -89,16 +82,6 @@ class Convolution(object):
 		self.output = T.tanh(results + self.b.dimshuffle('x',0,'x','x'))
 		return self.output
 
-	def backpropagate(self, delta_W, delta_b):
-		self.delta_W = T.batched_dot(delta_W,self.jacobian_W)
-		self.delta_b = T.batched_dot(delta_b,self.jacobian_b)
-		
-		# Because we passed in self, we can just
-		# have our learning algorithm update the
-		# bias and weights for us
-		self.learn.update()
-		return (self.delta_W, self.delta_b)
-
 class Pool(object):
 	def __init__(self, shape):
 		self.shape = shape
@@ -117,17 +100,6 @@ class Pool(object):
 		))
 
 		return self.output
-
-	def backpropagate(self, delta_W, delta_b):
-		self.delta_W = T.batched_dot(delta_W,self.jacobian_W)
-		self.delta_b = T.batched_dot(delta_b,self.jacobian_b)
-		
-		# Because we passed in self, we can just
-		# have our learning algorithm update the
-		# bias and weights for us
-		self.learn.update()
-		return (self.delta_W, self.delta_b)
-
 """
 With our fully connected layer our 2D image is converted
 back to a 1D array which we apply a dot for our weights
@@ -143,15 +115,11 @@ class FCLayer(object):
 		self,
 		n_in,
 		n_out,
-		learn=None,
 		W=None,
 		b=None,
-		cost=None,
 		activation=T.tanh
     	):
 		self.activation = activation
-		self.cost = cost
-		#self.learn = learn.set_layer(self)
 
 		rng = np.random.RandomState()
 
@@ -174,8 +142,6 @@ class FCLayer(object):
 			b_values = np.zeros((n_out,), dtype=theano.config.floatX)
 			b = theano.shared(value=b_values, name='b', borrow=True)
 
-		self.W = W
-		self.b = b
 		self.params = [self.W, self.b]
 
 	def get_output(self, input):
@@ -187,41 +153,3 @@ class FCLayer(object):
 		)
 
 		return self.output
-
-	"""
-	Takes in our inputs and spits out a whole bunch of predictions
-	and then returns a tuple consisting:
-
-	(avg_cost, jacobian_W, jacobian_b)
-	"""
-	def get_cost(self, y, inputs):
-		predictions = scan.theano(
-			fn=lambda input: self.get_output(T.argmax(input)),
-			sequences=[inputs]
-		)
-
-		costs = theano.scan(
-			fn=self.cost,
-			sequences=[predictions, y]
-		)[0]
-
-		self.avg_cost = costs.mean()
-
-		self.grad_W = T.grad(avg_cost, self.W)
-		self.grad_b = T.grad(avg_cost, self.b)
-
-		return (
-			self.avg_cost,
-			self.grad_W,
-			self.grad_b	
-		)
-
-	def backpropagate(self, delta_W, delta_b):
-		self.delta_W = T.batched_dot(delta_W,self.grad_W)
-		self.delta_b = T.batched_dot(delta_b,self.grad_b)
-		
-		# Because we passed in self, we can just
-		# have our learning algorithm update the
-		# bias and weights for us
-		self.learn.update()
-		return (self.delta_W, self.delta_b)

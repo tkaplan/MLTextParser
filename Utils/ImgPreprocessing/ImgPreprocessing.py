@@ -314,28 +314,6 @@ class PreProcessing:
 			fn=lambda x, y: x.dot(y),
 			sequences=[specs_scan, norms_scan]
 		)[0]
-		# norms = theano.shared(
-		# 	value=index,
-		# 	name='idx',
-		# 	borrow=True
-		# )
-
-		# specs = theano.shared(
-		# 	value=specs,
-		# 	name='specs',
-		# 	borrow=True
-		# )
-
-		# norms = theano.shared(
-		# 	value=specs,
-		# 	name='specs',
-		# 	borrow=True
-		# )
-
-		# return theano.scan(
-		# 	fn=lambda specs, norms: x.dot(y),
-		# 	sequences=[]
-		# )
 
 	def get_covariance_subs(self, patches, mean):
 		number_of_imgs = patches.shape[0] / (self.stride * self.stride * 4)
