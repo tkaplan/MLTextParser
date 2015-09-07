@@ -81,7 +81,11 @@ class ZCA_Whitening:
 		spectrum = self.__spectral_matrix(covariance)
 
 		logger.info("Applying whitening and centering")
-		return T.batched_tensordot(n_patches, spectrum)
+		return theano.scan(
+			fn=lambda row, spectrum: spectrum.dot(row),
+			sequences=[n_patches],
+			non_sequences=[spectrum]
+		)[0]
 
 
 class Patch(object):
