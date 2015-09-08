@@ -24,11 +24,17 @@ csetA = a.get_characterset('A')
 
 img_size = 32
 
-print("Number of training images")
-# We instantiate our image preprocessor
-patch_processor = Patch(size=32, patch_size=8, resolution=4)
+print("Get images")
+t3_images = csetA.t3_training()
 
-shared_patches = csetA.t3_training(sigma=None, scale=)
+# We instantiate our image preprocessor
+print("Get patches")
+patch_processor = Patch(size=32, patch_size=8, resolution=4)
+t3_patches = patch_processor.get_patches(t3_images)
+
+print("Whiten training patches")
+zca = ZCA_Whitening()
+whitened_patches = zca.process(t3_patches)
 
 # # KSphere with 96 filters and 10 iterations
 # ks_115 = l_u.KSphere(115, 10)

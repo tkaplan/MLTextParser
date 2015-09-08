@@ -16,22 +16,6 @@ class ZCA_Whitening:
 		# Set up file handler for file logging
 		self.logger = dev_logger.logger(__name__ + ".ZCA_Whitening")
 
-		self.cov_matrix = np.zeros(
-			(
-				self.stride * 4,
-				self.patch_size ** 2,
-				self.patch_size ** 2	
-			),
-			dtype=theano.config.floatX
-		)
-
-		self.covariant_loop = self.__build_covariant_loop()
-
-		# Input covariant tensor 3 get eigens tensor 3
-		self.eigens = self.__build_eigens_t3()
-		# Input identity matrix and eigenvalues
-		self.eigen_diag = self.__build_eigenvalue_diag()
-
 	def __spectral_matrix(self, covariance):
 		egvalues, egmatrix = T.nlinalg.eig(covariance)
 		egmatrix_inv = T.nlinalg.matrix_inverse(egmatrix)
@@ -45,11 +29,11 @@ class ZCA_Whitening:
 		return egmatrix.dot(diag_sqr_inv).dot(egmatrix_inv)
 
 	def process(self, t3):
+		logger = self.logger
 		logger.info("Retrieving patches")
-		patches = self__get_patches(t3)
 		
 		logger.info("Reshaping patches")
-		patches = patches.reshape((
+		patches = t3.reshape((
 			t3.shape[0],
 			t3.shape[1] * t3.shape[2]
 		))
@@ -89,7 +73,7 @@ class ZCA_Whitening:
 
 
 class Patch(object):
-	def __init__(self, size, patch_size, sigma, resolution):
+	def __init__(self, size, patch_size, resolution):
 		np.set_printoptions(threshold=np.nan)
 		# Set up file handler for file logging
 		self.logger = dev_logger.logger(__name__ + ".Patch")

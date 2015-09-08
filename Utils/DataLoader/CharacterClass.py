@@ -26,7 +26,7 @@ class CharacterClass(object):
 		# Or image, however we don't care to do that yet
 		return imresize
 
-	def t3_training(self, pp, size=32, sigma = None):
+	def t3_training(self, size=32, sigma=None):
 		t3 = np.zeros(
 			(
 				len(self.training),
@@ -38,7 +38,7 @@ class CharacterClass(object):
 
 		for i in range(len(self.training)):
 			imgv = self.next_training()
-			imgv = self.scale(size, imgv)
+			imgv = self.scale(imgv, size)
 			if sigma != None:
 				imgv = ndimage.gaussian_filter(imgv, sigma)
 
