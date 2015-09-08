@@ -1,5 +1,5 @@
 import theano.tensor as T
-import theano.tensor.signal.conv as conv
+from theano.tensor.nnet import conv
 import theano.tensor.signal.downsample as downsample
 import theano
 
@@ -20,6 +20,8 @@ class Convolution(object):
 		self.filter_shape = filter_shape
 		self.params = [self.W, self.b]
 
+	def set_zactivator(self, alpha=.5):
+		return None
 	"""
 	:type filters: 3rd or second rank tensor
 	"""
@@ -35,7 +37,7 @@ class Convolution(object):
     :param image_shape: (batch size, num input feature maps,
                              image height, image width)
 
-	:param filter_shape: (num input feature maps, number of filters,
+	:param filter_shape: (num input filters, number of feature maps,
                               filter height, filter width)
 
 	# Not used but maybe piped into a pool.
@@ -45,13 +47,14 @@ class Convolution(object):
 	def withoutFilters(cls, filter_shape, image_shape, poolsize=4):
 		rng = np.random.RandomState()
 
-		fan_in = (np.prod(filter_shape[0] * filter_shape[2:]) / poolsize)
-
-		# each unit in the lower layer recieves a gradient from:
-		# "num output feature maps * filter height * filter width"
-		# / pooling size
-		fan_out = (np.prod(filter_shape[1:]) /
-					np.prod(poolsize))
+		# there are "num input feature maps * filter height * filter width"
+		# inputs to each hidden unit
+		fan_in = np.prod(filter_shape[1:])
+		# each unit in the lower layer receives a gradient from:
+		# "num output feature maps * filter height * filter width" /
+		#   pooling size
+		fan_out = (filter_shape[0] * np.prod(filter_shape[2:]) /
+			np.prod(poolsize))
 
 		W_bound = np.sqrt(6. / (fan_in + fan_out))
 
@@ -63,13 +66,7 @@ class Convolution(object):
 			borrow=True
 		)
 
-		filters = filters.reshape((
-			filter_shape[0] * filter_shape[1],
-			filter_shape[2],
-			filter_shape[3]
-		))
-
-		return cls(tuple(filters.shape.eval()), image_shape, filters)
+		return cls(filter_shape, image_shape, filters)
 
 	def get_output(self, input):
 		results = conv.conv2d(
@@ -93,13 +90,13 @@ class Pool(object):
 			ignore_border=True
 		)
 
-		self.output = output.reshape((
-			output.shape[0].eval() * output.shape[1].eval(),
-			output.shape[2].eval(),
-			output.shape[3].eval()
-		))
+		# self.output = output.reshape((
+		# 	output.shape[0].eval() * output.shape[1].eval(),
+		# 	output.shape[2].eval(),
+		# 	output.shape[3].eval()
+		# ))
 
-		return self.output
+		return output
 """
 With our fully connected layer our 2D image is converted
 back to a 1D array which we apply a dot for our weights
@@ -136,20 +133,23 @@ class FCLayer(object):
 			if activation == theano.tensor.nnet.sigmoid:
 				W_values *= 4
 
-		W = theano.shared(value=W_values, name='W', borrow=True)
+		self.W = theano.shared(value=W_values, name='W', borrow=True)
 
 		if b is None:
 			b_values = np.zeros((n_out,), dtype=theano.config.floatX)
-			b = theano.shared(value=b_values, name='b', borrow=True)
+			self.b = theano.shared(value=b_values, name='b', borrow=True)
 
 		self.params = [self.W, self.b]
 
 	def get_output(self, input):
-		lin_output = T.dot(input, self.W) + self.b
+		print("Printing shapes")
+		print(input.shape.eval())
+		print(self.W.shape.eval())
+		z = T.dot(input, self.W) + self.b
 
 		self.output = (
-			lin_output if self.activation is None
-			else self.activation(lin_output)
+			z if self.activation is None
+			else self.activation(z)
 		)
 
 		return self.output

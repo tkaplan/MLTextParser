@@ -62,11 +62,11 @@ class KSphere(object):
 		)
 
 		self.logger.info("D.shape[0].eval()")
-		#self.logger.debug(D.shape[0].eval())
+		self.logger.debug(D.shape[0].eval())
 		self.logger.info("D.shape[1].eval()")
-		#self.logger.debug(D.shape[1].eval())
+		self.logger.debug(D.shape[1].eval())
 		self.logger.info("D")
-		#self.logger.debug(D.eval())
+		self.logger.debug(D.eval())
 		self.logger.info("Normalizing D to create D_t2")
 
 		# The initial random dictionary is now normalized

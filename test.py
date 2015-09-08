@@ -10,14 +10,13 @@ import theano
 from theano import tensor as T
 from theano import function
 
-import Learning.Supervised as l_s
-import Learning.Unsupervised as l_u
+from Learning.Supervised import Convolution, Pool, FCLayer
+from Learning.Unsupervised import KSphere
 import Learning.Costs as costs
 
 import numpy as np
 
 a = NOFont.NOFont(.1,.4)
-b = NOHandwritting.NOHandwritting(.01,.4)
 batch_size = 600
 
 csetA = a.get_characterset('A')
@@ -36,49 +35,70 @@ print("Whiten training patches")
 zca = ZCA_Whitening()
 whitened_patches = zca.process(t3_patches)
 
-# # KSphere with 96 filters and 10 iterations
-# ks_115 = l_u.KSphere(115, 10)
+print("Learn filters")
+ks_115 = KSphere(115, 10)
+ks_95 = KSphere(95, 10)
+filters_multi = ks_115.spherical_k(whitened_patches)
+filters_bin = ks_95.spherical_k(whitened_patches)
 
-# # t3 data blurred
-# print("Building data set")
-# t3 = csetA.t3_training(pp)
+# x is our input average
+x = T.matrix('x')
+y = T.ivector('y')
 
-# print("Whitening successful! Lets do some unsuppervised learning!!!")
-# # Returns matrix of 2d matrix
-# D_Filters = ks_115.spherical_k(whitened_patches)
+print("Convolve0")
+conv0 = Convolution.withFilters(
+	image_shape=t3_images.shape[0:1] + (1,) + t3_images.shape[-2:],
+	filters=filters_multi.reshape((115,1,8,8))
+)
 
-# # x is our input average
-# x = T.matrix('x')
-# y = T.ivector('y')
+t3_images = t3_images.reshape(t3_images.shape[0:1] + (1,) + t3_images.shape[-2:])
 
-# print("Convolve0")
-# conv0 = l_s.Convolution.withFilters(
-# 	image_shape=t3.shape,
-# 	filters=D_Filters.reshape((96,8,8))
-# )
-# feature_maps0 = conv0.get_output(x)
+fm0 = conv0.get_output(theano.shared(t3_images,borrow=True))
 
-# print("Pool0")
-# pool0 = l_s.Pool((2,2))
-# pool_out0 = pool0.get_output(feature_maps0)
-# pool_out0 = pool_out0.flatten()
+print(fm0.shape.eval())
 
-# print("FCLayer 0")
-# fc0 = l_s.FCLayer(
-# 	pool_out0.shape[0].eval(),
-# 	500
-# )
+print("Pool0")
+pool0 = Pool((2,2))
+pool_out0 = pool0.get_output(fm0)
 
-# fc0_out = fc0.get_output(pool_out0)
+print(pool_out0.shape.eval())
 
-# print("Get softmax output")
-# soft0 = l_s.FCLayer(
-# 	500,
-# 	62,
-# 	activation=T.nnet.softmax
-# )
+conv1 = Convolution.withoutFilters(
+	filter_shape=(20,115,4,4),
+	image_shape=pool_out0.shape.eval()
+)
 
-# output = T.argmax(soft0.get_output(fc0_out))
+fm1 = conv1.get_output(pool_out0)
+
+pool1 = Pool((2,2))
+pool_out1 = pool1.get_output(fm1)
+
+print("######")
+print(pool_out1.shape.eval())
+
+pool_out1 = pool_out1.flatten(2)
+
+print(pool_out1.shape.eval())
+
+print("FCLayer 0")
+fc0 = FCLayer(
+	pool_out1.shape[1].eval(),
+	n_out=500
+)
+
+fc0_out = fc0.get_output(pool_out1)
+print(fc0_out.shape.eval())
+
+print("Get softmax output")
+soft0 = FCLayer(
+	500,
+	62,
+	activation=T.nnet.softmax
+)
+
+output = T.argmax(soft0.get_output(fc0_out), axis=1)
+
+print(output.eval())
 
 # params = soft0.params + fc0.params + conv0.params
 
