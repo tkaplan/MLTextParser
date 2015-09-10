@@ -17,7 +17,7 @@ import Learning.Costs as costs
 import numpy as np
 
 a = NOFont.NOFont(.1,.4)
-batch_size = 600
+batch_size = 50
 
 csetA = a.get_characterset('A')
 
@@ -42,52 +42,62 @@ filters_multi = ks_115.spherical_k(whitened_patches)
 filters_bin = ks_95.spherical_k(whitened_patches)
 
 # x is our input average
-x = T.matrix('x')
-y = T.ivector('y')
-
-print("Convolve0")
-conv0 = Convolution.withFilters(
-	image_shape=t3_images.shape[0:1] + (1,) + t3_images.shape[-2:],
-	filters=filters_multi.reshape((115,1,8,8))
-)
+# We define our x input and expected y out
+x = T.tensor4('x', dtype=theano.config.floatX)
+y = T.matrix('y', dtype=theano.config.floatX)
 
 t3_images = t3_images.reshape(t3_images.shape[0:1] + (1,) + t3_images.shape[-2:])
+t3_images_shared = theano.shared(t3_images, borrow=True)
 
-fm0 = conv0.get_output(theano.shared(t3_images,borrow=True))
+# Define out
+a = np.ones((batch_size,1))
+y_a = np.append(a,np.zeros((50,61)), 1)
 
-print(fm0.shape.eval())
+
+t3_y_out_shared = theano.shared(
+	value=y_a.astype(theano.config.floatX),
+	borrow=True
+)
+
+filters_multi = theano.shared(
+	value=filters_multi.reshape((115,1,8,8)).eval().astype(theano.config.floatX),
+	borrow=True
+)
+
+print("Convolve0")
+print((50,) + (1,) + t3_images.shape[-2:])
+nkernels=[115,20]
+conv0 = Convolution.withFilters(
+	filter_shape=(nkernels[0], 1, 8, 8),
+	image_shape=(batch_size, 1,) + t3_images.shape[-2:],
+	filters=filters_multi
+)
+
+fm0 = conv0.get_output(x)
 
 print("Pool0")
 pool0 = Pool((2,2))
 pool_out0 = pool0.get_output(fm0)
 
-print(pool_out0.shape.eval())
 
 conv1 = Convolution.withoutFilters(
-	filter_shape=(20,115,4,4),
-	image_shape=pool_out0.shape.eval()
+	filter_shape=(nkernels[1],nkernels[0],4,4),
+	image_shape=(batch_size, nkernels[0],  12,  12)
 )
 
 fm1 = conv1.get_output(pool_out0)
 
 pool1 = Pool((2,2))
 pool_out1 = pool1.get_output(fm1)
-
-print("######")
-print(pool_out1.shape.eval())
-
 pool_out1 = pool_out1.flatten(2)
-
-print(pool_out1.shape.eval())
 
 print("FCLayer 0")
 fc0 = FCLayer(
-	pool_out1.shape[1].eval(),
+	n_in=320,
 	n_out=500
 )
 
 fc0_out = fc0.get_output(pool_out1)
-print(fc0_out.shape.eval())
 
 print("Get softmax output")
 soft0 = FCLayer(
@@ -96,30 +106,28 @@ soft0 = FCLayer(
 	activation=T.nnet.softmax
 )
 
-output = T.argmax(soft0.get_output(fc0_out), axis=1)
+output = soft0.get_output(fc0_out)
+params = soft0.params + fc0.params + conv1.params + conv0.params
 
-print(output.eval())
+cost = T.mean(T.nnet.binary_crossentropy(y, output))
+grads = T.grad(cost, params)
 
-# params = soft0.params + fc0.params + conv0.params
+updates = [
+	(param_i, param_i - .001 * grad_i)
+	for param_i, grad_i in zip(params, grads)
+]
 
-# cost = costs.cross_entropy(output)
+index = T.lscalar()
 
-# grads = T.grad(cost(y), params)
+train_model = theano.function(
+	inputs=[index],
+	outputs=cost,
+	updates=updates,
+	givens={
+		x: t3_images_shared[index * batch_size: (index + 1) * batch_size],
+		y: t3_y_out_shared[index * batch_size: (index + 1) * batch_size]
+	}
+)
 
-# updates = [
-# 	(param_i, param_i - .001 * grad_i)
-# 	for param_i, grad_i in zip(params, grads)
-# ]
-
-# index = T.lscalar()
-
-# train_model = theano.function(
-#     inputs=[index],
-#     outputs=cost,
-#     updates=updates,
-#     givens={
-#       x: t3_shared[index * batch_size: (index + 1) * batch_size],
-#       y: y[index * batch_size: (index + 1) * batch_size]
-#     }
-#   )
-
+train_model(0)
+print("Fucking success!!! :)")

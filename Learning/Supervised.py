@@ -26,8 +26,8 @@ class Convolution(object):
 	:type filters: 3rd or second rank tensor
 	"""
 	@classmethod
-	def withFilters(cls, image_shape, filters):
-		filter_shape = tuple(filters.shape.eval())
+	def withFilters(cls, filter_shape, image_shape, filters):
+		filter_shape = filter_shape
 		return cls(filter_shape, image_shape, filters)
 
 	"""
@@ -89,13 +89,6 @@ class Pool(object):
 			ds=self.shape,
 			ignore_border=True
 		)
-
-		# self.output = output.reshape((
-		# 	output.shape[0].eval() * output.shape[1].eval(),
-		# 	output.shape[2].eval(),
-		# 	output.shape[3].eval()
-		# ))
-
 		return output
 """
 With our fully connected layer our 2D image is converted
@@ -142,9 +135,6 @@ class FCLayer(object):
 		self.params = [self.W, self.b]
 
 	def get_output(self, input):
-		print("Printing shapes")
-		print(input.shape.eval())
-		print(self.W.shape.eval())
 		z = T.dot(input, self.W) + self.b
 
 		self.output = (
