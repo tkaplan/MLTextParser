@@ -19,40 +19,102 @@ import numpy as np
 
 import timeit
 
+# self.nh = NOHandwritting.NOHandwritting(training, validation)
+# char_classes = list(string.letters) + list(range(10))
+# self.classes_size = len(char_classes)
+# self.char_set = [self.nh.get_characterset(char) for char in char_classes]
+
+
 # Assume we only classify fonts
 class NeuralNetwork(object):
 	def __init__(self,
 		training,
 		validation,
+		test,
 		batch_size=600,
 		img_shape=(32,32),
-		patch_size=8,
-		sigma=1.2,
-		resolution=4,
-		k_filters=115,
-		k_iterations=10):
+		pre_processor=None
+		):
 		self.batch_size
 		self.training = training
 		self.validation = validation
-		self.nh = NOHandwritting.NOHandwritting(training, validation)
-		char_classes = list(string.letters) + list(range(10))
-		self.classes_size = len(char_classes)
-		self.char_set = [self.nh.get_characterset(char) for char in char_classes]
+		self.test = test
 
-		# Image preprocessor will transform the image before sends it as input into our
-		# neural net
-		self.pp = ImgPP(size=img_shape, patch_size=patch_size, sigma=sigma, resolution=4)
-		self.ks = learning_unsupervised.KSphere(k_filters, k_iterations)
+		self.logger = dev_logger.logger(__name__ + ".NeuralNetwork")
 
-	def build_filters(self):
-		return None
+	def build_fclayer(self, layer, previous_layer, last_output, **kwargs):
+		# We need to reshape the last_output
+		# depending on what type of layer we had
+		if previous_layer['name'] in ['Pool', Convolution]:
+			last_output = last_output.flatten(2)
+			kwargs['n_in'] = (
+				previous_layer['output_shape'][2] * \
+				previous_layer['output_shape'][3]
+			)
+		else:
+			# We can assume we have an fc layer
+			kwargs['n_in'] = previous_layer['output_shape'][1]
+			layer['output_shape'] = (kwargs['n_in'],kwargs['n_out'])
 
-	def zca_whiten(self):
-		return None
+		# With FCLayer we can just passing kwargs
+		layer_entity = FCLayer(**kwargs)
+
+		return (layer, layer_entity)
+
+	def build_convolution(self, layer, previous_layer, last_output, **kwargs):
+		input_shape = previous_layer['output_shape']
+		layer['filter_shape'] = (
+			kwargs['n_kerns'],
+			input_shape[0],
+			kwargs['height'],
+			kwargs['width']
+		)
+
+		layer_entity = Convolution.withoutFilters(
+			filter_shape=layer['filter_shape'],
+			image_shape=input_shape
+		)
+		
+		layer['output_shape'] = layer_entity.output_shape()
+		return (layer, layer_entity)
+
+	def build_pool(self, layer, previous_layer, last_output, **kwargs):
+		layer_entity = Pool(kwargs['shape'])
+		if previous_layer.name == 'Convolution':
+			layer['output_shape'] = layer_entity.output_shape(
+				previous_layer['output_shape'],
+				previous_layer['filter_shape']
+			)
+		else:
+			layer['output_shape'] = (
+				previous_layer['output_shape'] / kwargs['shape']
+			)
+		return (layer, layer_entity)
 
 	# We assume all inputs/ outputs are t3
-	def add(self, layer):
-		self.layers[-1].get_output(self.output)
+	def add(self, name, **kwargs):	
+		output = self.layers[-1].last_output
+
+		layer = {
+			'name': name
+		}
+
+		previous_layer = self.layers[-1]
+		last_output = previous_layer['output']
+
+		if name == 'FCLayer':
+			layer, layer_entity = self.build_fclayer(self, layer, previous_layer, last_output, **kwargs)
+		
+		# Get the filter shape that we need for conv nets
+		if name == 'Convolution':
+			layer, layer_entity = self.build_convolution(self, layer, previous_layer, last_output, **kwargs)
+
+		if name == 'Pool':
+			layer, layer_entity = self.build_pool(self, layer, previous_layer, last_output, **kwargs)
+
+		layer['output'] = layer_entity.get_output(last_output)
+		layer['entity'] = layer_entity
+		self.layers.push(layer)
 
 	def train(self,
 		patience=10000,

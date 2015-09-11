@@ -67,6 +67,7 @@ filters_multi = theano.shared(
 print("Convolve0")
 print((50,) + (1,) + t3_images.shape[-2:])
 nkernels=[115,20]
+
 conv0 = Convolution.withFilters(
 	filter_shape=(nkernels[0], 1, 8, 8),
 	image_shape=(batch_size, 1,) + t3_images.shape[-2:],
@@ -75,11 +76,25 @@ conv0 = Convolution.withFilters(
 
 fm0 = conv0.get_output(x)
 
+next_filter = conv0.pipe_filter_shape(20, 4, 4)
+next_img = conv0.pipe_image_shape
+print("Next_filter conv0")
+print(next_filter)
+print(next_img)
 print("Pool0")
 pool0 = Pool((2,2))
 pool_out0 = pool0.get_output(fm0)
-
-
+next_filter = pool0.pipe_filter_shape((nkernels[0], 1, 8, 8), 20, 4, 4)
+next_img = pool0.pipe_image_shape(
+	(batch_size, 1,) + t3_images.shape[-2:],
+	(nkernels[0], 1, 8, 8)
+)
+print("Next_filter pool0")
+print(next_filter)
+print(next_img)
+print("####")
+print((nkernels[1],nkernels[0],4,4))
+print((batch_size, nkernels[0],  12,  12))
 conv1 = Convolution.withoutFilters(
 	filter_shape=(nkernels[1],nkernels[0],4,4),
 	image_shape=(batch_size, nkernels[0],  12,  12)

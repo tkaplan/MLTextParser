@@ -68,6 +68,14 @@ class Convolution(object):
 
 		return cls(filter_shape, image_shape, filters)
 
+	def output_shape(self):
+		return (
+			self.image_shape[0],
+			self.filter_shape[1],
+			self.image_shape[2] - self.filter_shape[2],
+			self.image_shape[3] - self.filter_shape[3]
+		)
+
 	def get_output(self, input):
 		results = conv.conv2d(
 			input=input,
@@ -82,6 +90,14 @@ class Convolution(object):
 class Pool(object):
 	def __init__(self, shape):
 		self.shape = shape
+
+	def output_shape(self, image_shape, filter_shape):
+		return (
+			image_shape[0],
+			filter_shape[0],
+			int((image_shape[2] - filter_shape[2]) / self.shape[0]),
+			int((image_shape[3] - filter_shape[3]) / self.shape[1])
+		)
 
 	def get_output(self, input):
 		output = downsample.max_pool_2d(
@@ -133,6 +149,9 @@ class FCLayer(object):
 			self.b = theano.shared(value=b_values, name='b', borrow=True)
 
 		self.params = [self.W, self.b]
+
+	def output_shape(self):
+		return (n_in, n_out)
 
 	def get_output(self, input):
 		z = T.dot(input, self.W) + self.b
