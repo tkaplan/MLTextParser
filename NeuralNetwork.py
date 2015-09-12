@@ -16,6 +16,8 @@ import Learning.Supervised as supervised_learning
 import Learning.Unsupervised as usupervised_learning
 import Learning.Costs as costs
 
+import dev_logger
+
 import numpy as np
 
 import timeit
@@ -29,19 +31,14 @@ import timeit
 # Assume we only classify fonts
 class NeuralNetwork(object):
 	def __init__(self,
-		training,
-		validation,
-		test,
-		batch_size=600,
-		img_shape=(32,32),
+		input_shape,
+		n_out,
 		pre_processor=None
 		):
-		self.batch_size
-		self.training = training
-		self.validation = validation
-		self.test = test
 		self.layers = []
 		self.params = []
+		self.input_shape = input_shape
+		self.n_out = n_out
 		self.output = None
 		self.finalized = False
 		self.logger = dev_logger.logger(__name__ + ".NeuralNetwork")
@@ -50,7 +47,11 @@ class NeuralNetwork(object):
 		# We need to reshape the last_output
 		# depending on what type of layer we had
 		if previous_layer['name'] in ['Pool', 'Convolution']:
-			last_output = last_output.flatten(2)
+			os = previous_layer['output_shape']
+			last_output = last_output.reshape((
+				os[0] * os[1],
+				os[2] * os[3]
+			))
 			kwargs['n_in'] = (
 				previous_layer['output_shape'][2] * \
 				previous_layer['output_shape'][3]
@@ -63,13 +64,17 @@ class NeuralNetwork(object):
 		entity = FCLayer(**kwargs)
 		layer['output_shape'] = entity.output_shape()
 
-		return (layer, entity)
+		### Logging ###
+		self.logger.info("fclayer output shape")
+		self.logger.info(layer['output_shape'])
+
+		return (layer, entity, last_output)
 
 	def build_convolution(self, layer, previous_layer, last_output, **kwargs):
 		input_shape = previous_layer['output_shape']
 		layer['filter_shape'] = (
 			kwargs['n_kerns'],
-			input_shape[0],
+			input_shape[1],
 			kwargs['height'],
 			kwargs['width']
 		)
@@ -80,47 +85,36 @@ class NeuralNetwork(object):
 		)
 		
 		layer['output_shape'] = entity.output_shape()
+		layer['image_shape'] = input_shape
+		layer['filter_shape'] = layer['filter_shape']
+
+		### Logging ###
+		self.logger.info("conv output shape")
+		self.logger.info(layer['output_shape'])
+		self.logger.info("conv image shape")
+		self.logger.info(layer['image_shape'])
+		self.logger.info("conv filter shape")
+		self.logger.info(layer['filter_shape'])
+
 		return (layer, entity)
 
 	def build_pool(self, layer, previous_layer, last_output, **kwargs):
 		entity = Pool(kwargs['shape'])
-		if previous_layer.name == 'Convolution':
+		if previous_layer['name'] == 'Convolution':
 			layer['output_shape'] = entity.output_shape(
-				previous_layer['output_shape'],
-				previous_layer['filter_shape']
+				previous_layer['output_shape']
 			)
+
 		else:
 			layer['output_shape'] = (
 				previous_layer['output_shape'] / kwargs['shape']
 			)
-		return (layer, entity)
 
-	# We are assuming that Pool layer cannot be
-	# first.
-	#
-	# First layers can either be convolution or fc.
-	# If the first layer is a convolution, we require
-	# 4-Rank Tensor otherwise we use a matrix of flattened
-	# array images.
-	def head_layer(self, layer, **kwargs):
-		input = kwargs['input']
-		# We must delete kwargs input because
-		# we're going to use kwargs directly to
-		# create our layer
-		del kwargs['input']
-
-		class_ = getattr(supervised_learning, layer['name'])
-		entity = class_(**kwargs)
-		layer['output_shape'] = entity.output_shape()
-
-		if layer['name'] == 'Convolution':
-			layer['filter_shape'] = entity.filter_shape
-			self.input = T.ftensor4('inputs')
-		else:
-			self.input = T.fmatrix('inputs')
+		### Logging ###
+		self.logger.info("pool output shape")
+		self.logger.info(layer['output_shape'])
 
 		return (layer, entity)
-
 
 	# We assume all inputs/ outputs are t3
 	def add(self, name, **kwargs):
@@ -131,15 +125,25 @@ class NeuralNetwork(object):
 			'name': name
 		}
 
-		previous_layer = self.layers[-1]
-		last_output = previous_layer['outputs']
+		last_output = None
+		previous_layer = None
 
 		if len(self.layers) == 0:
-			layer, entity = self.head_layer(name, **kwargs)
-			self.params += entity.params
-
-		elif name == 'FCLayer':
-			layer, entity = self.build_fclayer(layer, previous_layer, last_output, **kwargs)
+			if layer['name'] == 'Convolution':
+				self.inputs = T.ftensor4('inputs')
+				last_output = self.inputs
+				previous_layer = {
+					'output_shape': self.input_shape
+				}
+			else:
+				self.inputs = T.fmatrix('inputs')
+				last_output = self.inputs
+		else:
+			previous_layer = self.layers[-1]
+			last_output = previous_layer['outputs']
+		
+		if name == 'FCLayer':
+			layer, entity, last_output = self.build_fclayer(layer, previous_layer, last_output, **kwargs)
 			self.params += entity.params
 		
 		# Get the filter shape that we need for conv nets
@@ -152,7 +156,7 @@ class NeuralNetwork(object):
 
 		layer['outputs'] = entity.get_outputs(last_output)
 		layer['entity'] = entity
-		self.layers.push(layer)
+		self.layers.append(layer)
 
 	# This will transform our inputs before it's fed
 	# into the net
@@ -163,7 +167,10 @@ class NeuralNetwork(object):
 	# but softmax is the easiest way to normalize and
 	# binary_crossentropy seems like the best method that I
 	# know of.
-	def compile(self, n_out):
+	def compile(self):
+		# get our output
+		self.add('FCLayer', n_out=self.n_out, activation=T.nnet.softmax)
+
 		# We should crash and burn if someone trys to compile
 		# without any layers.
 		if len(self.layers) == 0:
@@ -172,14 +179,11 @@ class NeuralNetwork(object):
 		# finalize our neural net so we can't add anymore layers
 		self.finalized = True
 
-		# get our output
-		self.add('FCLayer', n_out=n_out, activation=T.nnet.softmax)
-
-		output = self.layers[-1]
+		output = self.layers[-1]['outputs']
 		
 		# Define our input
 		self.softmax_classify = theano.function(
-			inputs=[self.input],
+			inputs=[self.inputs],
 			outputs=[output]
 		)
 
@@ -236,77 +240,77 @@ class NeuralNetwork(object):
 			}
 		)
 
-	def train(self,
-		patience=10000,
-		patience_increase=2,
-		improvement_threshold=0.995
-	):
-		print("... training the model")
+	# def train(self,
+	# 	patience=10000,
+	# 	patience_increase=2,
+	# 	improvement_threshold=0.995
+	# ):
+	# 	print("... training the model")
 
-		validation_frequency = min(n_train_batches, patience / 2)
+	# 	validation_frequency = min(n_train_batches, patience / 2)
 
-		best_validation_loss = np.inf
-		best_iter = 0
-		test_score = 0.
-		start_time = timeit.default_timer()
+	# 	best_validation_loss = np.inf
+	# 	best_iter = 0
+	# 	test_score = 0.
+	# 	start_time = timeit.default_timer()
 
-		done_looping = False
-		epoch = 0
-		while (epoch < n_epochs) and (not done_looping):
-			epoch = epoch + 1
-			for minibatch_index in range(n_train_batches):
-				minbatch_avg_cost = train_model(minibatch_index)
-				iter = (epoch - 1) * n_train_batches + minibatch_index
-				if (iter + 1) % validation_frequency == 0:
-					validation_losses = [
-						validate_model(i) for i in xrange(n_valid_batches)
-					]
-					this_validation_loss = numpy.mean(validation_losses)
-					print(
-						'epoch %i, minibatch %i/%i, validation error %f %%' %
-						(
-							epoch,
-							minibatch_index + 1,
-							n_train_batches,
-							this_validation_loss * 100
-						)
-					)
+	# 	done_looping = False
+	# 	epoch = 0
+	# 	while (epoch < n_epochs) and (not done_looping):
+	# 		epoch = epoch + 1
+	# 		for minibatch_index in range(n_train_batches):
+	# 			minbatch_avg_cost = train_model(minibatch_index)
+	# 			iter = (epoch - 1) * n_train_batches + minibatch_index
+	# 			if (iter + 1) % validation_frequency == 0:
+	# 				validation_losses = [
+	# 					validate_model(i) for i in xrange(n_valid_batches)
+	# 				]
+	# 				this_validation_loss = numpy.mean(validation_losses)
+	# 				print(
+	# 					'epoch %i, minibatch %i/%i, validation error %f %%' %
+	# 					(
+	# 						epoch,
+	# 						minibatch_index + 1,
+	# 						n_train_batches,
+	# 						this_validation_loss * 100
+	# 					)
+	# 				)
 
-					if this_validation_loss < best_validation_loss:
-						if this_validation_loss < best_validation_loss * improvement_threshold:
-							patience = max(patience, iter * patience_increase)
-						best_validation_loss = this_validation_loss
-						best_iter = iter
-						test_losses = [
-							test_model(i) for i in xrange(n_test_batches)
-						]
-						test_score = numpy.mean(test_losses)
+	# 				if this_validation_loss < best_validation_loss:
+	# 					if this_validation_loss < best_validation_loss * improvement_threshold:
+	# 						patience = max(patience, iter * patience_increase)
+	# 					best_validation_loss = this_validation_loss
+	# 					best_iter = iter
+	# 					test_losses = [
+	# 						test_model(i) for i in xrange(n_test_batches)
+	# 					]
+	# 					test_score = numpy.mean(test_losses)
 
-						print(
-							'epoch %i, minibatch %i/%i, validation error %f %%' %
-							(
-								epoch,
-								minibatch_index + 1,
-								n_train_batches,
-								test_score * 100
-							)
-						)
+	# 					print(
+	# 						'epoch %i, minibatch %i/%i, validation error %f %%' %
+	# 						(
+	# 							epoch,
+	# 							minibatch_index + 1,
+	# 							n_train_batches,
+	# 							test_score * 100
+	# 						)
+	# 					)
 
-				if patience <= iter:
-					done_looping = True
-					break
+	# 			if patience <= iter:
+	# 				done_looping = True
+	# 				break
 				
-			end_time = timeit.default_timer()
+	# 		end_time = timeit.default_timer()
 			
-			print(
-				(
-					'Optimization complete with best validation score of %f %%,'
-					'with test performance %f %%'
-				)
-				% (best_validation_loss * 100., test_score * 100.)
-			)
+	# 		print(
+	# 			(
+	# 				'Optimization complete with best validation score of %f %%,'
+	# 				'with test performance %f %%'
+	# 			)
+	# 			% (best_validation_loss * 100., test_score * 100.)
+	# 		)
 
-			print("the code run for %d epochs, with %f epochs/sec" % (
-				epoch, 1. * epoch / (end_time - start_time)
-			))
+	# 		print("the code run for %d epochs, with %f epochs/sec" % (
+	# 			epoch, 1. * epoch / (end_time - start_time)
+	# 		))
 

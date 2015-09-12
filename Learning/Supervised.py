@@ -4,6 +4,7 @@ import theano.tensor.signal.downsample as downsample
 import theano
 
 import numpy as np
+import math
 
 class Convolution(object):
 	"""
@@ -71,9 +72,9 @@ class Convolution(object):
 	def output_shape(self):
 		return (
 			self.image_shape[0],
-			self.filter_shape[1],
-			self.image_shape[2] - self.filter_shape[2],
-			self.image_shape[3] - self.filter_shape[3]
+			self.filter_shape[0],
+			self.image_shape[2] - self.filter_shape[2] + 1,
+			self.image_shape[3] - self.filter_shape[3] + 1
 		)
 
 	def get_outputs(self, input):
@@ -91,12 +92,13 @@ class Pool(object):
 	def __init__(self, shape):
 		self.shape = shape
 
-	def output_shape(self, image_shape, filter_shape):
+	# Only use for convolution
+	def output_shape(self, input_shape):
 		return (
-			image_shape[0],
-			filter_shape[0],
-			int((image_shape[2] - filter_shape[2]) / self.shape[0]),
-			int((image_shape[3] - filter_shape[3]) / self.shape[1])
+			input_shape[0],
+			input_shape[1],
+			int(input_shape[2] / self.shape[0]),
+			int(input_shape[3] / self.shape[1])
 		)
 
 	def get_outputs(self, input):
@@ -129,6 +131,9 @@ class FCLayer(object):
 
 		rng = np.random.RandomState()
 
+		self.n_in = n_in
+		self.n_out = n_out
+
 		if W is None:
 			W_values = np.asarray(
 				rng.uniform(
@@ -151,7 +156,7 @@ class FCLayer(object):
 		self.params = [self.W, self.b]
 
 	def output_shape(self):
-		return (n_in, n_out)
+		return (self.n_in, self.n_out)
 
 	def get_outputs(self, input):
 		z = T.dot(input, self.W) + self.b
