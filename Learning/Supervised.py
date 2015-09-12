@@ -76,7 +76,7 @@ class Convolution(object):
 			self.image_shape[3] - self.filter_shape[3]
 		)
 
-	def get_output(self, input):
+	def get_outputs(self, input):
 		results = conv.conv2d(
 			input=input,
 			filters=self.W,
@@ -99,7 +99,7 @@ class Pool(object):
 			int((image_shape[3] - filter_shape[3]) / self.shape[1])
 		)
 
-	def get_output(self, input):
+	def get_outputs(self, input):
 		output = downsample.max_pool_2d(
 			input=input,
 			ds=self.shape,
@@ -153,7 +153,7 @@ class FCLayer(object):
 	def output_shape(self):
 		return (n_in, n_out)
 
-	def get_output(self, input):
+	def get_outputs(self, input):
 		z = T.dot(input, self.W) + self.b
 
 		self.output = (
