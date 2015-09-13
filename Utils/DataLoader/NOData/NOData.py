@@ -2,6 +2,7 @@ from os import listdir
 import os.path as path
 import Utils.DataLoader.CharacterClass as cc
 import random
+import numpy as np
 
 class NOBase(object):
 	# training: 0 < float < 1
@@ -55,12 +56,16 @@ class NOBase(object):
 		# Get number of files in folder
 		folder = self.get_classpath(character)
 		
+		target_vector = np.zeros((62))
+		target_vector[int(self.get_classno(character)) - 1] = 1
+
 		# Files we need to load
 		files = [ path.join(folder,f) for f in listdir(folder) if path.isfile(path.join(folder,f)) ]
 		training, validation, test = self.split_datasets(files)
 		return cc.CharacterClass(
 			character = character,
 			files = files,
+			target_vector = target_vector,
 			training = training,
 			validation = validation,
 			test = test

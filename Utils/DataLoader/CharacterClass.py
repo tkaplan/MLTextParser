@@ -7,8 +7,9 @@ import numpy as np
 
 class CharacterClass(object):
 
-	def __init__(self, character, files, training, validation, test):
+	def __init__(self, character, files, target_vector, training, validation, test):
 		self.character = character
+		self.target_vector = target_vector
 		self.files = files
 		self.training = training
 		self.validation = validation
@@ -16,6 +17,10 @@ class CharacterClass(object):
 		self.training_it = iter(training)
 		self.validation_it = iter(self.validation)
 		self.test_it = iter(test)
+		print("printing character")
+		print(self.character)
+		print("print vector")
+		print(self.target_vector)
 
 	def scale(self, imgv, size):
 		# We want to shorten by the largest dimmension

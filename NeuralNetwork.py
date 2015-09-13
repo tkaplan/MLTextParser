@@ -18,29 +18,35 @@ import Learning.Costs as costs
 
 import dev_logger
 
+import math
+
 import numpy as np
 
 import timeit
 
-# self.nh = NOHandwritting.NOHandwritting(training, validation)
-# char_classes = list(string.letters) + list(range(10))
-# self.classes_size = len(char_classes)
-# self.char_set = [self.nh.get_characterset(char) for char in char_classes]
-
 
 # Assume we only classify fonts
 class NeuralNetwork(object):
+	from enum import Enum
+	class DataSet(Enum):
+		training = 0
+		validation = 1
+		testing = 2
+
 	def __init__(self,
 		input_shape,
 		n_out,
-		pre_processor=None
+		batch_size,
+		preprocessor=None
 		):
 		self.layers = []
 		self.params = []
+		self.batch_size = batch_size
 		self.input_shape = input_shape
 		self.n_out = n_out
 		self.output = None
 		self.finalized = False
+		self.preprocessor = preprocessor
 		self.logger = dev_logger.logger(__name__ + ".NeuralNetwork")
 
 	def build_fclayer(self, layer, previous_layer, last_output, **kwargs):
@@ -133,7 +139,7 @@ class NeuralNetwork(object):
 				self.inputs = T.ftensor4('inputs')
 				last_output = self.inputs
 				previous_layer = {
-					'output_shape': self.input_shape
+					'output_shape': (self.batch_size, 1,) + self.input_shape
 				}
 			else:
 				self.inputs = T.fmatrix('inputs')
@@ -182,34 +188,122 @@ class NeuralNetwork(object):
 		output = self.layers[-1]['outputs']
 		
 		# Define our input
-		self.softmax_classify = theano.function(
+		self.softmax_classify_fn = theano.function(
 			inputs=[self.inputs],
 			outputs=[output]
 		)
 
+	@staticmethod
+	def pad_with_zeros(input, batch_size):
+		padding = (
+			((math.ceil(input.shape[0] / batch_size) * \
+			batch_size)) - input.shape[0]
+		)
+
+		padding_tensor = np.zeros((padding,) + input.shape[1:])
+
+		return np.vstack((input, padding_tensor))
+
+	@staticmethod
+	def pad_with_wrap(input, batch_size):
+		batch_size
+
+		padding = (
+			((math.ceil(input.shape[0] / batch_size) * \
+			batch_size)) - input.shape[0]
+		)
+
+		padding_tensor = None
+
+		## This loop gives us the number of times we need to wrap
+		for wrap_index in range(1, math.ceil(padding / input.shape[0]) + 1):
+			### if input > padding ###
+			if padding - input.shape[0] < 1:
+				padding_tensor = input[0:padding]
+			elif wrap_index * input.shape[0] < padding:
+				if type(padding_tensor).__module__ != np.__name__:
+					padding_tensor = input
+				else:
+					padding_tensor = np.vstack((
+						padding_tensor,
+						input
+					))
+			else:
+				padding_tensor = np.vstack((
+					padding_tensor,
+					input[0: padding - wrap_index * input.shape[0]]
+				))
+
+		if type(padding_tensor).__module__ != np.__name__:
+			return input
+		else:
+			return np.vstack((input,padding_tensor))
+
 	# Returns a tuple of: (argmax(softmax), (sm0, sm1, ... smN))
 	def softmax_classify(self, input):
+		results = []
+
 		if self.preprocessor != None:
 			input = self.preprocessor(input)
 
-		return self.softmax_classify(input)
+		input = NeuralNetwork.pad_with_zeros(input, self.batch_size).astype(theano.config.floatX)
+
+		if self.layers[0]['name'] == 'Convolution':
+			input = input.reshape((input.shape[0], 1,) + self.input_shape)
+
+		for index in range(math.ceil(input.shape[0]/self.batch_size)):
+			index_start = index * self.batch_size
+			index_stop = (index + 1) * self.batch_size
+			batch = input[index_start : index_stop]
+			results.append(self.softmax_classify_fn(batch))
+
+		return results
 	
 	# Set our training, testing, and validation data
 	# Where data is organized as [(input, target)]
-	def set_ttv_data(self, training, testing, validation):
-		self.training = training
-		self.testing = testing
-		self.validation = validation
+	# Our data set is simply non shared data. We convert
+	# Regular data to shared.
+	
+	# data_set = [(inputs, targets),(inputs, target),(inputs, target)]
+	
+	def set_ttv_data(self, data_set):
+
+		inputs = []
+		targets = []
+
+		for index in range(len(data_set)):
+			data_set_pair = data_set[index]
+			
+			## Wrap our data_sets ##
+			inputs.append(NeuralNetwork.pad_with_wrap(
+				data_set_pair[0],
+				self.batch_size
+			))
+			targets.append(NeuralNetwork.pad_with_wrap(
+				data_set_pair[1],
+				self.batch_size
+			))
+
+			## Reshape our data_sets if necessary ##
+			if self.layers[0]['name'] == 'Convolution':
+				inputs[-1] = input.reshape((inputs[-1].shape[0], 1,) + self.input_shape)
+				targets[-1] = output.reshape((targets[-1].shape[0], 1,) + self.input_shape)
+
+			## Build our shared data_sets ##
+			inputs[-1] = theano.shared(inputs[-1], borrow=True)
+			targets[-1] = theano.shared(targets[-1], borrow=True)
+
+		self.inputs_ds = inputs
+		self.targets_ds = targets
 
 	def train(self,
-		batch_size,
 		learning_rate=.001,
 		patience=10000,
 		patience_increase=2,
 		improvement_threshold=0.995
 		):
 		targets = T.fmatrix('targets')
-
+		batch_size = self.batch_size
 		outputs = self.layers[-1]['outputs']
 		# Build out our training model
 		cost = T.mean(
@@ -227,16 +321,56 @@ class NeuralNetwork(object):
 		]
 
 		index = T.lscalar()
-		inputs_shared = self.training['inputs']
-		targets_shared = self.training['targets']
+		inputs_shared = self.inputs_ds(NeuralNetwork.DataSet.training.value)
+		targets_shared = self.targets_ds(NeuralNetwork.DataSet.training.value)
 
 		self.training_model = theano.function(
 			inputs=[index],
 			outputs=cost,
 			updates=updates,
 			givens={
-				inputs: inputs_shared[index * batch_size: (index + 1) * batch_size],
-				targets: targets_shared[index * batch_size: (index + 1) * batch_size]
+				inputs: self.inputs_ds[NN.DataSet.training.value][index * batch_size: (index + 1) * batch_size],
+				targets: self.targets_ds[NN.DataSet.training.value][index * batch_size: (index + 1) * batch_size]
+			}
+		)
+
+		cnn_out = T.argmax(self.layers[-1]['outputs'],axis=1)
+
+		# Shared testing and validation targets
+		target_testing_sh = self.targets_ds[NN.DataSet.testing.value]
+		target_validation_sh = self.targets_ds[NN.DataSet.validation.value]
+
+		# Shared testing and validation inputs
+		input_testing_sh = self.targets_ds[NN.DataSet.testing.value]
+		input_validation_sh = self.targets_ds[NN.DataSet.validation.value]
+
+		# Collapse our matrix into a vector
+		target_testing_sh = T.argmax(target_testing_sh,axis=1)
+		target_validation_sh = T.argmax(target_validation_sh,axis=1)
+
+		# Declare our target outs
+		target_testing = T.ivector("target_testing")
+		target_validation = T.ivector("target_validation")
+
+		# Create our error tests
+		error_testing = T.mean(T.neq(target_testing, cnn_out))
+		error_validation = T.mean(T.neq(target_validation, cnn_out))
+
+		testing_model = theano.function(
+			[index],
+			outputs=[error_testing],
+			givens={
+				inputs: input_testing_sh[index * batch_size: (index + 1) * batch_size],
+				target_testing: target_testing_sh[index * batch_size: (index + 1) * batch_size]
+			}
+		)
+
+		validate_model = theano.function(
+			[index],
+			outputs=[error_validation],
+			givens={
+				inputs: input_validation_sh[index * batch_size: (index + 1) * batch_size],
+				target_validation: target_validation_sh[index * batch_size: (index + 1) * batch_size]
 			}
 		)
 

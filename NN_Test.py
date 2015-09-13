@@ -19,67 +19,80 @@ from Learning.Unsupervised import KSphere
 import Learning.Costs as costs
 
 import numpy as np
-
-a = NOFont.NOFont(.1,.4)
-batch_size = 50
-
-csetA = a.get_characterset('A')
-
-img_size = 32
-
-print("Get images")
-t3_images = csetA.t3_training()
-
-# Reshape our image so it fits our conv net
-t3_images = t3_images.reshape((t3_images.shape[0], 1, 32, 32))
-
+import string
 
 batch_size = 50
+training = .5
+validation = .25
 
-nn = NN(
-	# For conv nets we take
-	# (None, 1, height, width)
-	input_shape=(batch_size, 1, 32, 32),
-	# We want to classify 62 characters
-	n_out=62
-)
+nh = NOHandwritting.NOHandwritting(training, validation)
+char_classes = list(string.ascii_letters) + [str(i) for i in range(10)]
+print(char_classes)
+classes_size = len(char_classes)
+char_set = [nh.get_characterset(char) for char in char_classes]
 
-# Add our convolution
-# Which takes the parameters
-# n_kerns, height, and width
-nn.add(
-	'Convolution',
-	n_kerns=115,
-	height=8,
-	width=8
-)
+# for char_class in char_set:
+	
+# 	# setup training set
+# 	training = char_class.t3_training()
+# 	training_input_set.append(training)
+# 	training_target_set.append(char_class.get_target_vector)
+	
+# 	# setup testing set
+# 	testing = char_class.t3_testing()
+# 	testing_input_set.append(testing)
+# 	testing_target_set.append(char_class.get_target_vector)
 
-# Now we want to add pooling
-nn.add(
-	'Pool',
-	shape=(2,2)
-)
+# 	# setup validation set
+# 	validation = char_class.t3_validation()
+# 	validation_input_set.append(validation)
+# 	validation_target_set.append(char_class.target_vector)
+# batch_size = 50
 
-# Add convolution
-nn.add(
-	'Convolution',
-	n_kerns=20,
-	height=4,
-	width=4
-)
+# nn = NN(
+# 	# For conv nets we take
+# 	# (None, 1, height, width)
+# 	batch_size=batch_size,
+# 	input_shape=(32, 32),
+# 	# We want to classify 62 characters
+# 	n_out=62
+# )
 
-# Add pooling layer
-nn.add(
-	'Pool',
-	shape=(2,2)
-)
+# # Add our convolution
+# # Which takes the parameters
+# # n_kerns, height, and width
+# nn.add(
+# 	'Convolution',
+# 	n_kerns=115,
+# 	height=8,
+# 	width=8
+# )
 
-# Add fc layer
-nn.add(
-	'FCLayer',
-	n_out=500
-)
+# # Now we want to add pooling
+# nn.add(
+# 	'Pool',
+# 	shape=(2,2)
+# )
 
-nn.compile()
-print(t3_images[0:50].shape)
-print(nn.softmax_classify(t3_images[0:50]))
+# # Add convolution
+# nn.add(
+# 	'Convolution',
+# 	n_kerns=20,
+# 	height=4,
+# 	width=4
+# )
+
+# # Add pooling layer
+# nn.add(
+# 	'Pool',
+# 	shape=(2,2)
+# )
+
+# # Add fc layer
+# nn.add(
+# 	'FCLayer',
+# 	n_out=500
+# )
+
+# nn.compile()
+# print(nn.softmax_classify(t3_images))
