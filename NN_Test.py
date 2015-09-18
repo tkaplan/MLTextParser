@@ -26,73 +26,101 @@ training = .5
 validation = .25
 
 nh = NOHandwritting.NOHandwritting(training, validation)
-char_classes = list(string.ascii_letters) + [str(i) for i in range(10)]
+#char_classes = list(string.ascii_letters) + [str(i) for i in range(10)]
+char_classes = [str(i) for i in range(10)]
 print(char_classes)
 classes_size = len(char_classes)
 char_set = [nh.get_characterset(char) for char in char_classes]
+dataset = []
+for char_class in char_set:
+	ds = char_class.get_dataset();
+	# training, validiation, testing
+	for type in range(3):
+		ds_type = ds[type]
+		ds_input = ds_type[0]
+		ds_target = ds_type[1]
+		
+		# Just assign the first array if we do not have
+		# anything in our dataset
+		if len(dataset) - 1 < type:
+			dataset.append([ds_input,ds_target])
+			continue
 
-# for char_class in char_set:
-	
-# 	# setup training set
-# 	training = char_class.t3_training()
-# 	training_input_set.append(training)
-# 	training_target_set.append(char_class.get_target_vector)
-	
-# 	# setup testing set
-# 	testing = char_class.t3_testing()
-# 	testing_input_set.append(testing)
-# 	testing_target_set.append(char_class.get_target_vector)
+		# Concate inputs
+		dataset[type][0] = np.concatenate(
+			(
+				dataset[type][0],
+				ds_input
+			),
+			axis=0
+		)
 
-# 	# setup validation set
-# 	validation = char_class.t3_validation()
-# 	validation_input_set.append(validation)
-# 	validation_target_set.append(char_class.target_vector)
-# batch_size = 50
 
-# nn = NN(
-# 	# For conv nets we take
-# 	# (None, 1, height, width)
-# 	batch_size=batch_size,
-# 	input_shape=(32, 32),
-# 	# We want to classify 62 characters
-# 	n_out=62
-# )
+		dataset[type][1] = np.concatenate(
+			(
+				dataset[type][1],
+				ds_target
+			),
+			axis=0
+		)
+	print(char_class.character)
 
-# # Add our convolution
-# # Which takes the parameters
-# # n_kerns, height, and width
-# nn.add(
-# 	'Convolution',
-# 	n_kerns=115,
-# 	height=8,
-# 	width=8
-# )
+# Now we need to randomize our array indices
+for type in range(3):
+	np.random.shuffle(dataset[type][0])
+	np.random.shuffle(dataset[type][1])
 
-# # Now we want to add pooling
-# nn.add(
-# 	'Pool',
-# 	shape=(2,2)
-# )
+batch_size = 50
 
-# # Add convolution
-# nn.add(
-# 	'Convolution',
-# 	n_kerns=20,
-# 	height=4,
-# 	width=4
-# )
+nn = NN(
+	# For conv nets we take
+	# (None, 1, height, width)
+	batch_size=batch_size,
+	input_shape=(32, 32),
+	# We want to classify 62 characters
+	n_out=62
+)
 
-# # Add pooling layer
-# nn.add(
-# 	'Pool',
-# 	shape=(2,2)
-# )
+# Add our convolution
+# Which takes the parameters
+# n_kerns, height, and width
+nn.add(
+	'Convolution',
+	n_kerns=115,
+	height=8,
+	width=8
+)
 
-# # Add fc layer
-# nn.add(
-# 	'FCLayer',
-# 	n_out=500
-# )
+# Now we want to add pooling
+nn.add(
+	'Pool',
+	shape=(2,2)
+)
 
-# nn.compile()
-# print(nn.softmax_classify(t3_images))
+# Add convolution
+nn.add(
+	'Convolution',
+	n_kerns=20,
+	height=4,
+	width=4
+)
+
+# Add pooling layer
+nn.add(
+	'Pool',
+	shape=(2,2)
+)
+
+# Add fc layer
+nn.add(
+	'FCLayer',
+	n_out=500
+)
+
+nn.compile()
+nn.set_ttv_data(dataset)
+nn.train()
+
+
+
+

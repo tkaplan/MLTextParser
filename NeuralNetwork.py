@@ -55,13 +55,10 @@ class NeuralNetwork(object):
 		if previous_layer['name'] in ['Pool', 'Convolution']:
 			os = previous_layer['output_shape']
 			last_output = last_output.reshape((
-				os[0] * os[1],
-				os[2] * os[3]
+				os[0],
+				os[1] * os[2] * os[3]
 			))
-			kwargs['n_in'] = (
-				previous_layer['output_shape'][2] * \
-				previous_layer['output_shape'][3]
-			)
+			kwargs['n_in'] = os[1] * os[2] * os[3]
 		else:
 			# We can assume we have an fc layer
 			kwargs['n_in'] = previous_layer['output_shape'][1]
@@ -278,16 +275,15 @@ class NeuralNetwork(object):
 			inputs.append(NeuralNetwork.pad_with_wrap(
 				data_set_pair[0],
 				self.batch_size
-			))
+			).astype(theano.config.floatX))
 			targets.append(NeuralNetwork.pad_with_wrap(
 				data_set_pair[1],
 				self.batch_size
-			))
+			).astype(theano.config.floatX))
 
 			## Reshape our data_sets if necessary ##
 			if self.layers[0]['name'] == 'Convolution':
-				inputs[-1] = input.reshape((inputs[-1].shape[0], 1,) + self.input_shape)
-				targets[-1] = output.reshape((targets[-1].shape[0], 1,) + self.input_shape)
+				inputs[-1] = inputs[-1].reshape((inputs[-1].shape[0], 1,) + self.input_shape)
 
 			## Build our shared data_sets ##
 			inputs[-1] = theano.shared(inputs[-1], borrow=True)
@@ -321,36 +317,35 @@ class NeuralNetwork(object):
 		]
 
 		index = T.lscalar()
-		inputs_shared = self.inputs_ds(NeuralNetwork.DataSet.training.value)
-		targets_shared = self.targets_ds(NeuralNetwork.DataSet.training.value)
-
+		input_training_sh = self.inputs_ds[NeuralNetwork.DataSet.training.value]
+		target_training_sh = self.targets_ds[NeuralNetwork.DataSet.training.value]
 		self.training_model = theano.function(
 			inputs=[index],
-			outputs=cost,
+			outputs=[cost],
 			updates=updates,
 			givens={
-				inputs: self.inputs_ds[NN.DataSet.training.value][index * batch_size: (index + 1) * batch_size],
-				targets: self.targets_ds[NN.DataSet.training.value][index * batch_size: (index + 1) * batch_size]
+				self.inputs: input_training_sh[index * batch_size: (index + 1) * batch_size],
+				targets: target_training_sh[index * batch_size: (index + 1) * batch_size]
 			}
 		)
 
 		cnn_out = T.argmax(self.layers[-1]['outputs'],axis=1)
 
 		# Shared testing and validation targets
-		target_testing_sh = self.targets_ds[NN.DataSet.testing.value]
-		target_validation_sh = self.targets_ds[NN.DataSet.validation.value]
+		target_testing_sh = self.targets_ds[NeuralNetwork.DataSet.testing.value]
+		target_validation_sh = self.targets_ds[NeuralNetwork.DataSet.validation.value]
 
 		# Shared testing and validation inputs
-		input_testing_sh = self.targets_ds[NN.DataSet.testing.value]
-		input_validation_sh = self.targets_ds[NN.DataSet.validation.value]
+		input_testing_sh = self.inputs_ds[NeuralNetwork.DataSet.testing.value]
+		input_validation_sh = self.inputs_ds[NeuralNetwork.DataSet.validation.value]
 
 		# Collapse our matrix into a vector
 		target_testing_sh = T.argmax(target_testing_sh,axis=1)
 		target_validation_sh = T.argmax(target_validation_sh,axis=1)
 
 		# Declare our target outs
-		target_testing = T.ivector("target_testing")
-		target_validation = T.ivector("target_validation")
+		target_testing = T.lvector("target_testing")
+		target_validation = T.lvector("target_validation")
 
 		# Create our error tests
 		error_testing = T.mean(T.neq(target_testing, cnn_out))
@@ -360,7 +355,7 @@ class NeuralNetwork(object):
 			[index],
 			outputs=[error_testing],
 			givens={
-				inputs: input_testing_sh[index * batch_size: (index + 1) * batch_size],
+				self.inputs: input_testing_sh[index * batch_size: (index + 1) * batch_size],
 				target_testing: target_testing_sh[index * batch_size: (index + 1) * batch_size]
 			}
 		)
@@ -369,10 +364,17 @@ class NeuralNetwork(object):
 			[index],
 			outputs=[error_validation],
 			givens={
-				inputs: input_validation_sh[index * batch_size: (index + 1) * batch_size],
+				self.inputs: input_validation_sh[index * batch_size: (index + 1) * batch_size],
 				target_validation: target_validation_sh[index * batch_size: (index + 1) * batch_size]
 			}
 		)
+
+		self.logger.info("Training!")
+		self.logger.info(testing_model(0))
+		for i in range(2000):
+			for i in range(6):
+				self.logger.info(self.training_model(i))
+		self.logger.info(testing_model(0))
 
 	# def train(self,
 	# 	patience=10000,
