@@ -293,7 +293,9 @@ class NeuralNetwork(object):
 		self.targets_ds = targets
 
 	def train(self,
-		learning_rate=.001,
+		learning_rate=.0001,
+		l2_rate=.0001,
+		l1_rate=.0001,
 		patience=10000,
 		patience_increase=2,
 		improvement_threshold=0.995
@@ -301,14 +303,30 @@ class NeuralNetwork(object):
 		targets = T.fmatrix('targets')
 		batch_size = self.batch_size
 		outputs = self.layers[-1]['outputs']
+
+		params = self.params
+
+		w_list = [T.sum(T.abs_(param[0].flatten())) for param in params]
+		w_sum = sum(w_list)
+		
+		w_sqr_list = [T.sum(T.sqr(param[0].flatten())) for param in params]
+		w_sqr_sum = sum(w_sqr_list)
+
+		w_num_list = [param[0].flatten().shape[0] for param in params]
+		w_num = sum(w_num_list)
+		
+		l2 = w_sqr_sum * l2_rate
+
+		l1 = w_sum * l1_rate
+
 		# Build out our training model
 		cost = T.mean(
 			T.nnet.binary_crossentropy(
 				outputs, targets
-			)
+			) + l1 + l2
 		)
 		
-		params = self.params
+		
 		grads = T.grad(cost, params)
 
 		updates = [
@@ -370,11 +388,23 @@ class NeuralNetwork(object):
 		)
 
 		self.logger.info("Training!")
+
 		self.logger.info(testing_model(0))
-		for i in range(2000):
-			for i in range(6):
-				self.logger.info(self.training_model(i))
-		self.logger.info(testing_model(0))
+		iterations = 0
+		error_model_old = 2
+		error_model_new = testing_model(0)[0]
+		epsilon = 0.001
+		training_range = int(target_training_sh.shape[0].eval() / 50)
+		testing_range = int(target_testing_sh.shape[0].eval() / 50)
+		print(training_range)
+		print(testing_range)
+		while True:
+				for i in range(training_range):
+					self.logger.info(self.training_model(i))
+					error_model_list = [ testing_model(i)[0] for i in range(testing_range) ]
+					error_model_old = error_model_new
+					error_model_new = sum(error_model_list)/testing_range
+					print(error_model_new)
 
 	# def train(self,
 	# 	patience=10000,

@@ -35,8 +35,8 @@ class CharacterClass(object):
 			target[:,self.target_param] = 1
 			dataset.append(
 				(
-					self.t3_images(ds_type, size, sigma),
-					target
+					self.t3_images(ds_type, size, sigma).astype(theano.config.floatX),
+					target.astype(theano.config.floatX)
 				)
 			)
 		return dataset

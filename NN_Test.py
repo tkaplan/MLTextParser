@@ -26,8 +26,8 @@ training = .5
 validation = .25
 
 nh = NOHandwritting.NOHandwritting(training, validation)
-#char_classes = list(string.ascii_letters) + [str(i) for i in range(10)]
-char_classes = [str(i) for i in range(10)]
+char_classes = list(string.ascii_letters) + [str(i) for i in range(10)]
+#char_classes = [str(i) for i in range(10)]
 print(char_classes)
 classes_size = len(char_classes)
 char_set = [nh.get_characterset(char) for char in char_classes]
@@ -100,16 +100,16 @@ nn.add(
 # Add convolution
 nn.add(
 	'Convolution',
-	n_kerns=20,
-	height=4,
-	width=4
+	n_kerns=256,
+	height=5,
+	width=5
 )
 
-# Add pooling layer
-nn.add(
-	'Pool',
-	shape=(2,2)
-)
+# # Add pooling layer
+# nn.add(
+# 	'Pool',
+# 	shape=(2,2)
+# )
 
 # Add fc layer
 nn.add(
