@@ -136,11 +136,16 @@ class NeuralNetwork(object):
 				self.inputs = T.ftensor4('inputs')
 				last_output = self.inputs
 				previous_layer = {
+					'name': 'None',
 					'output_shape': (self.batch_size, 1,) + self.input_shape
 				}
 			else:
 				self.inputs = T.fmatrix('inputs')
 				last_output = self.inputs
+				previous_layer = {
+					'name': 'None',
+					'output_shape': (1, self.input_shape[0] * self.input_shape[1])
+				}
 		else:
 			previous_layer = self.layers[-1]
 			last_output = previous_layer['outputs']
@@ -247,6 +252,8 @@ class NeuralNetwork(object):
 
 		if self.layers[0]['name'] == 'Convolution':
 			input = input.reshape((input.shape[0], 1,) + self.input_shape)
+		else:
+			input = input.reshape((input.shape[0], self.input_shape[0] * self.input_shape[1]))
 
 		for index in range(math.ceil(input.shape[0]/self.batch_size)):
 			index_start = index * self.batch_size
@@ -284,7 +291,9 @@ class NeuralNetwork(object):
 			## Reshape our data_sets if necessary ##
 			if self.layers[0]['name'] == 'Convolution':
 				inputs[-1] = inputs[-1].reshape((inputs[-1].shape[0], 1,) + self.input_shape)
-
+			else:
+				inputs[-1] = inputs[-1].reshape((inputs[-1].shape[0], self.input_shape[0] * self.input_shape[1]))
+			print(inputs[-1].shape)
 			## Build our shared data_sets ##
 			inputs[-1] = theano.shared(inputs[-1], borrow=True)
 			targets[-1] = theano.shared(targets[-1], borrow=True)
@@ -293,11 +302,12 @@ class NeuralNetwork(object):
 		self.targets_ds = targets
 
 	def train(self,
-		learning_rate=.0001,
-		l2_rate=.0001,
-		l1_rate=.0001,
+		learning_rate=.006,
+		l2_rate=.00001,
+		l1_rate=.00001,
 		patience=10000,
 		patience_increase=2,
+		n_epochs=1000,
 		improvement_threshold=0.995
 		):
 		targets = T.fmatrix('targets')
@@ -315,16 +325,14 @@ class NeuralNetwork(object):
 		w_num_list = [param[0].flatten().shape[0] for param in params]
 		w_num = sum(w_num_list)
 		
-		l2 = w_sqr_sum * l2_rate
+		l2 = w_sqr_sum * l2_rate / (w_num * 2)
 
-		l1 = w_sum * l1_rate
+		l1 = w_sum * l1_rate / w_num
 
 		# Build out our training model
-		cost = T.mean(
-			T.nnet.binary_crossentropy(
-				outputs, targets
-			) + l1 + l2
-		)
+		cost = T.nnet.binary_crossentropy(
+			outputs, targets
+		).mean() + l1 + l2
 		
 		
 		grads = T.grad(cost, params)
@@ -337,7 +345,7 @@ class NeuralNetwork(object):
 		index = T.lscalar()
 		input_training_sh = self.inputs_ds[NeuralNetwork.DataSet.training.value]
 		target_training_sh = self.targets_ds[NeuralNetwork.DataSet.training.value]
-		self.training_model = theano.function(
+		training_model = theano.function(
 			inputs=[index],
 			outputs=[cost],
 			updates=updates,
@@ -378,6 +386,33 @@ class NeuralNetwork(object):
 			}
 		)
 
+		sanity_model = theano.function(
+			[index],
+			outputs=[T.neq(cnn_out, target_testing)],
+			givens={
+				self.inputs: input_testing_sh[index * batch_size: (index + 1) * batch_size],
+				target_testing: target_testing_sh[index * batch_size: (index + 1) * batch_size]
+			}
+		)
+
+		sanity_t_model = theano.function(
+			[index],
+			outputs=[target_testing],
+			givens={
+				#self.inputs: input_testing_sh[index * batch_size: (index + 1) * batch_size],
+				target_testing: target_testing_sh[index * batch_size: (index + 1) * batch_size]
+			}
+		)
+
+		sanity_o_model = theano.function(
+			[index],
+			outputs=[cnn_out],
+			givens={
+				self.inputs: input_testing_sh[index * batch_size: (index + 1) * batch_size],
+				#target_testing: target_testing_sh[index * batch_size: (index + 1) * batch_size]
+			}
+		)
+
 		validate_model = theano.function(
 			[index],
 			outputs=[error_validation],
@@ -389,94 +424,78 @@ class NeuralNetwork(object):
 
 		self.logger.info("Training!")
 
-		self.logger.info(testing_model(0))
-		iterations = 0
-		error_model_old = 2
-		error_model_new = testing_model(0)[0]
-		epsilon = 0.001
-		training_range = int(target_training_sh.shape[0].eval() / 50)
-		testing_range = int(target_testing_sh.shape[0].eval() / 50)
-		print(training_range)
-		print(testing_range)
-		while True:
-				for i in range(training_range):
-					self.logger.info(self.training_model(i))
-					error_model_list = [ testing_model(i)[0] for i in range(testing_range) ]
-					error_model_old = error_model_new
-					error_model_new = sum(error_model_list)/testing_range
-					print(error_model_new)
+		n_training_batches = int(target_training_sh.shape[0].eval() / self.batch_size)
+		n_validation_batches = int(target_validation_sh.shape[0].eval() / self.batch_size)
+		n_testing_batches = int(target_testing_sh.shape[0].eval() / self.batch_size)
+		validation_frequency = min(n_training_batches, patience / 2)
+		
+		best_validation_loss = np.inf
+		best_iter = 0
+		test_score = 0
+		start_time = timeit.default_timer()
 
-	# def train(self,
-	# 	patience=10000,
-	# 	patience_increase=2,
-	# 	improvement_threshold=0.995
-	# ):
-	# 	print("... training the model")
+		done_looping = False
+		epoch = 0
+		while (epoch < n_epochs) and (not done_looping):
+			epoch = epoch + 1
+			for minibatch_index in range(n_training_batches):
+				minibatch_avg_cost = training_model(minibatch_index)
+				iter = (epoch - 1) * n_training_batches + minibatch_index
+				if (iter + 1) % validation_frequency == 0:
+					validation_losses = [
+						validate_model(i) for i in range(n_validation_batches)
+					]
+					this_validation_loss = np.mean(validation_losses)
+					print(
+						'epoch %i, minibatch %i/%i, validation error %f %%' %
+						(
+							epoch,
+							minibatch_index + 1,
+							n_training_batches,
+							this_validation_loss * 100
+						)
+					)
 
-	# 	validation_frequency = min(n_train_batches, patience / 2)
+					if this_validation_loss < best_validation_loss:
+						if this_validation_loss < best_validation_loss * improvement_threshold:
+							patience = max(patience, iter * patience_increase)
+						best_validation_loss = this_validation_loss
+						best_iter = iter
+						test_losses = [
+							testing_model(i) for i in range(n_testing_batches)
+						]
+						test_score = np.mean(test_losses)
 
-	# 	best_validation_loss = np.inf
-	# 	best_iter = 0
-	# 	test_score = 0.
-	# 	start_time = timeit.default_timer()
+						print(
+							'epoch %i, minibatch %i/%i, validation error %f %%' %
+							(
+								epoch,
+								minibatch_index + 1,
+								n_training_batches,
+								test_score * 100
+							)
+						)
 
-	# 	done_looping = False
-	# 	epoch = 0
-	# 	while (epoch < n_epochs) and (not done_looping):
-	# 		epoch = epoch + 1
-	# 		for minibatch_index in range(n_train_batches):
-	# 			minbatch_avg_cost = train_model(minibatch_index)
-	# 			iter = (epoch - 1) * n_train_batches + minibatch_index
-	# 			if (iter + 1) % validation_frequency == 0:
-	# 				validation_losses = [
-	# 					validate_model(i) for i in xrange(n_valid_batches)
-	# 				]
-	# 				this_validation_loss = numpy.mean(validation_losses)
-	# 				print(
-	# 					'epoch %i, minibatch %i/%i, validation error %f %%' %
-	# 					(
-	# 						epoch,
-	# 						minibatch_index + 1,
-	# 						n_train_batches,
-	# 						this_validation_loss * 100
-	# 					)
-	# 				)
+						for i_i in range(n_testing_batches):
+							print("####")
+							print(sanity_t_model(i_i))
+							print(sanity_o_model(i_i))
+							print(sanity_model(i_i))
+							print("####")
+				if patience <= iter:
+					done_looping = True
+					break
 
-	# 				if this_validation_loss < best_validation_loss:
-	# 					if this_validation_loss < best_validation_loss * improvement_threshold:
-	# 						patience = max(patience, iter * patience_increase)
-	# 					best_validation_loss = this_validation_loss
-	# 					best_iter = iter
-	# 					test_losses = [
-	# 						test_model(i) for i in xrange(n_test_batches)
-	# 					]
-	# 					test_score = numpy.mean(test_losses)
+		end_time = timeit.default_timer()
 
-	# 					print(
-	# 						'epoch %i, minibatch %i/%i, validation error %f %%' %
-	# 						(
-	# 							epoch,
-	# 							minibatch_index + 1,
-	# 							n_train_batches,
-	# 							test_score * 100
-	# 						)
-	# 					)
+		print(
+			(
+				'Optimization complete with best validation score of %f %%,'
+				'with test performance %f %%'
+			)
+			% (best_validation_loss * 100., test_score * 100.)
+		)
 
-	# 			if patience <= iter:
-	# 				done_looping = True
-	# 				break
-				
-	# 		end_time = timeit.default_timer()
-			
-	# 		print(
-	# 			(
-	# 				'Optimization complete with best validation score of %f %%,'
-	# 				'with test performance %f %%'
-	# 			)
-	# 			% (best_validation_loss * 100., test_score * 100.)
-	# 		)
-
-	# 		print("the code run for %d epochs, with %f epochs/sec" % (
-	# 			epoch, 1. * epoch / (end_time - start_time)
-	# 		))
-
+		print("the code run for %d epochs, with %f epochs/sec" % (
+			epoch, 1. * epoch / (end_time - start_time)
+		))

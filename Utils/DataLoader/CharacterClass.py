@@ -24,14 +24,15 @@ class CharacterClass(object):
 		# Or image, however we don't care to do that yet
 		return imresize
 
-	def get_dataset(self, size=32, sigma=None):
+	def get_dataset(self, size=32, sigma=None, out_len=62):
 		dataset = []
 		
 		for ds_type in self.datasets:
 			target = np.zeros((
 						len(ds_type),
-						62
+						out_len
 					))
+
 			target[:,self.target_param] = 1
 			dataset.append(
 				(
